@@ -4,6 +4,10 @@ version = "0.1.0"
 authors = ["Anirudh Sivaraman <sk.anirudh@gmail.com>"]
 edition = "2018"
 
+[[bin]]
+name = "wasm2wat"
+path = "src/wasm2wat/bin/wasm2wat.rs"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -11,3 +15,6 @@ z3 = "0.4.0"
 env_logger = "0.6"
 log = "0.4"
 lazy_static = "1"
+wasmprinter = "0.2.0"
+anyhow = "1.0"
+getopts = "0.2"
