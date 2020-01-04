@@ -1,8 +1,6 @@
 extern crate env_logger;
 extern crate log;
 extern crate z3;
-use std::convert::TryInto;
-use z3::ast::Ast;
 use z3::*;
 
 fn main() {

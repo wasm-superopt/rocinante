@@ -1,6 +1,6 @@
-extern crate wasmprinter;
 extern crate anyhow;
 extern crate getopts;
+extern crate wasmprinter;
 use anyhow::Context;
 use getopts::Options;
 use std::env;
