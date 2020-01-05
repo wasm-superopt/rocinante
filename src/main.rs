@@ -21,7 +21,6 @@ fn read_wasm(file: &str) -> io::Result<Vec<u8>> {
 fn main() {
     let matches = App::new("Rocinante")
         .version(clap::crate_version!())
-        .author("Taegyun Kim <k.taegyun@gmail.com>")
         .about("Superoptimizer for WebAssembly")
         .arg(
             Arg::with_name("FILE")

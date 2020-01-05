@@ -1,26 +1,15 @@
 [package]
 name = "rocinante"
 version = "0.1.0"
-authors = ["Anirudh Sivaraman <sk.anirudh@gmail.com>"]
+authors = ["Taegyun Kim <k.taegyun@gmail.com", "Anirudh Sivaraman <sk.anirudh@gmail.com>"]
 edition = "2018"
-
-[[bin]]
-name = "wasm2wat"
-path = "src/wasm2wat/bin/wasm2wat.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0"
 clap = "*"
-env_logger = "0.6"
-getopts = "0.2"
-lazy_static = "1"
-log = "0.4"
-wasmprinter = "*"
 wabt = "*"
 wat = "*"
-z3 = "0.4.0"
 
 [dev-dependencies.cargo-husky]
 version = "1"
