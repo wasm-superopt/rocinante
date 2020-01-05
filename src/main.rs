@@ -30,8 +30,6 @@ fn main() {
         )
         .get_matches();
 
-    let _script_ext = "wast";
-
     let input = matches.value_of("FILE").unwrap();
     let ext = Path::new(input).extension().unwrap().to_str().unwrap();
 
