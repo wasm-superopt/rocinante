@@ -1,0 +1,11 @@
+[package]
+name = "shift-wasm"
+version = "0.1.0"
+authors = ["Taegyun Kim <k.taegyun@gmail.com>"]
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wasm-bindgen = "*"
