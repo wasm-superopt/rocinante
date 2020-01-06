@@ -11,6 +11,11 @@ clap = "*"
 wabt = "*"
 wat = "*"
 
+[dev-dependencies]
+env_logger = "*"
+log = "*"
+z3 = "*"
+
 [dev-dependencies.cargo-husky]
 version = "1"
 default-features = false # Disable features which are enabled by default
