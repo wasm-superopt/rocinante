@@ -12,8 +12,11 @@ wabt = "*"
 wat = "*"
 
 [dev-dependencies]
+anyhow = "*"
 env_logger = "*"
+getopts = "*"
 log = "*"
+wasmprinter = "*"
 z3 = "*"
 
 [dev-dependencies.cargo-husky]
