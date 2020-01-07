@@ -1,5 +1,6 @@
 extern crate clap;
 extern crate wabt;
+extern crate wasmparser;
 extern crate wat;
 
 use clap::{App, Arg};
@@ -10,6 +11,9 @@ use std::io::prelude::*;
 use std::path::Path;
 use std::str;
 use wabt::{Module, ReadBinaryOptions};
+use wasmparser::Parser;
+use wasmparser::ParserState;
+use wasmparser::WasmDecoder;
 
 fn read_wasm(file: &str) -> io::Result<Vec<u8>> {
     let mut data = Vec::new();
@@ -44,4 +48,36 @@ fn main() {
 
     let module = Module::read_binary(&binary, &ReadBinaryOptions::default()).unwrap();
     module.validate().unwrap();
+
+    let mut parser = Parser::new(&binary);
+
+    loop {
+        print!("0x{:08x}\t", parser.current_position());
+        let state = parser.read();
+        match *state {
+            ParserState::ExportSectionEntry {
+                field,
+                ref kind,
+                index,
+            } => {
+                println!(
+                    "ExportSectionEntry {{ field: \"{}\", kind: {:?}, index: {} }}",
+                    field, kind, index
+                );
+            }
+            ParserState::ImportSectionEntry {
+                module,
+                field,
+                ref ty,
+            } => {
+                println!(
+                    "ImportSectionEntry {{ module: \"{}\", field: \"{}\", ty: {:?} }}",
+                    module, field, ty
+                );
+            }
+            ParserState::EndWasm => break,
+            ParserState::Error(err) => panic!("Error: {:?}", err),
+            _ => println!("{:?}", state),
+        }
+    }
 }
