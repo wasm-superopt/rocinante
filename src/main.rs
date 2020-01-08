@@ -1,19 +1,17 @@
 extern crate clap;
+extern crate parity_wasm;
 extern crate wabt;
 extern crate wasmparser;
 extern crate wat;
 
 use clap::{App, Arg};
+use parity_wasm::elements::Module;
 use std::env;
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
 use std::path::Path;
 use std::str;
-use wabt::{Module, ReadBinaryOptions};
-use wasmparser::Parser;
-use wasmparser::ParserState;
-use wasmparser::WasmDecoder;
 
 fn read_wasm(file: &str) -> io::Result<Vec<u8>> {
     let mut data = Vec::new();
@@ -24,19 +22,22 @@ fn read_wasm(file: &str) -> io::Result<Vec<u8>> {
 
 fn main() {
     let matches = App::new("Rocinante")
-        .version(clap::crate_version!())
+        .author(env!("CARGO_PKG_AUTHORS"))
+        .version(env!("CARGO_PKG_VERSION"))
         .about("Superoptimizer for WebAssembly")
         .arg(
             Arg::with_name("FILE")
-                .help(".wasm/.wat/.wast file to optimize")
+                .help(".wasm/.wat file to optimize")
                 .required(true)
                 .index(1),
         )
         .get_matches();
 
     let input = matches.value_of("FILE").unwrap();
+    // Parse the extension of the input file.
     let ext = Path::new(input).extension().unwrap().to_str().unwrap();
 
+    // Read the input file into binary format.
     // TODO: Consider supporting wast. wast is a superset of wat that is
     // intended for writing test  scripts, and can contain assertions and other
     // commands.
@@ -46,38 +47,16 @@ fn main() {
         "wast" | _ => panic!("{}: unrecognized file type", input),
     };
 
-    let module = Module::read_binary(&binary, &ReadBinaryOptions::default()).unwrap();
-    module.validate().unwrap();
+    // Deserialize into an IR using parity-wasm.
+    let module = Module::from_bytes(&binary).expect("Failed to deserialize.");
 
-    let mut parser = Parser::new(&binary);
+    let code_section = module
+        .code_section()
+        .expect("No code section found in the module.");
 
-    loop {
-        print!("0x{:08x}\t", parser.current_position());
-        let state = parser.read();
-        match *state {
-            ParserState::ExportSectionEntry {
-                field,
-                ref kind,
-                index,
-            } => {
-                println!(
-                    "ExportSectionEntry {{ field: \"{}\", kind: {:?}, index: {} }}",
-                    field, kind, index
-                );
-            }
-            ParserState::ImportSectionEntry {
-                module,
-                field,
-                ref ty,
-            } => {
-                println!(
-                    "ImportSectionEntry {{ module: \"{}\", field: \"{}\", ty: {:?} }}",
-                    module, field, ty
-                );
-            }
-            ParserState::EndWasm => break,
-            ParserState::Error(err) => panic!("Error: {:?}", err),
-            _ => println!("{:?}", state),
+    for body in code_section.bodies() {
+        for instr in body.code().elements() {
+            println!("{}", instr);
         }
     }
 }
