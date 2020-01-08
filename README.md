@@ -9,3 +9,4 @@ cargo run -- <FILE>
 
 1. Reads `.wat` or `.wasm` file into binary format.
 2. Deserializes binary into an IR.
+3. Prints each function.
