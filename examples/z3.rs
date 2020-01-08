@@ -3,8 +3,8 @@ extern crate log;
 extern crate z3;
 
 use z3::{
-    ast::{Ast, Datatype, Int, BV},
-    Config, Context, DatatypeBuilder, SatResult, Solver, Sort,
+    ast::{forall_const, Ast, Bool, Datatype, Dynamic, Int, BV},
+    Config, Context, DatatypeBuilder, FuncDecl, Pattern, SatResult, Solver, Sort,
 };
 
 fn datatype() {
@@ -86,9 +86,42 @@ fn add() {
     assert_eq!(solver.check(), SatResult::Sat);
 }
 
+fn add_eq() {
+    let _ = env_logger::try_init();
+    let cfg = Config::new();
+    let ctx = Context::new(&cfg);
+    let x = Int::new_const(&ctx, "x");
+    let solver = Solver::new(&ctx);
+
+    let f1 = FuncDecl::new(&ctx, "f1", &[&Sort::int(&ctx)], &Sort::int(&ctx));
+    let f1_x: z3::ast::Int = f1.apply(&[&x.clone().into()]).as_int().unwrap();
+    let f1_x_pattern = Pattern::new(&ctx, &[&Dynamic::from_ast(&x.add(&[&x]))]);
+
+    let f2 = FuncDecl::new(&ctx, "f2", &[&Sort::int(&ctx)], &Sort::int(&ctx));
+    let f2_x: z3::ast::Int = f2.apply(&[&x.clone().into()]).as_int().unwrap();
+    let f2_x_pattern = Pattern::new(
+        &ctx,
+        &[&Dynamic::from_ast(&x.mul(&[&Int::from_i64(&ctx, 2)]))],
+    );
+
+    let forall: Bool = forall_const(
+        &ctx,
+        &[&x.clone().into()],
+        &[&f1_x_pattern, &f2_x_pattern],
+        &f1_x._eq(&f2_x).into(),
+    )
+    .as_bool()
+    .unwrap();
+
+    solver.assert(&forall);
+
+    assert_eq!(solver.check(), SatResult::Sat);
+}
+
 fn main() {
     simple();
     datatype();
     shift();
     add();
+    add_eq();
 }
