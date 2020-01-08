@@ -55,6 +55,9 @@ fn main() {
         .expect("No code section found in the module.");
 
     for body in code_section.bodies() {
+        for local in body.locals() {
+            println!("local {}, type: {}", local.count(), local.value_type());
+        }
         for instr in body.code().elements() {
             println!("{}", instr);
         }
