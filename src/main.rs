@@ -1,3 +1,5 @@
+#[macro_use]
+extern crate itertools;
 extern crate clap;
 extern crate parity_wasm;
 extern crate wabt;
@@ -66,7 +68,7 @@ fn main() {
     // the same in the module and the ordering is also the same.
     assert!(function_section.entries().len() == code_section.bodies().len());
 
-    for (i, func) in function_section.entries().iter().enumerate() {
+    for (func, body) in iproduct!(function_section.entries(), code_section.bodies()) {
         let type_idx = func.type_ref();
         let typ = &type_section.types()[type_idx as usize];
         // Type section only contains function types, so coerce it to a
@@ -79,8 +81,6 @@ fn main() {
         if let Some(return_type) = func_type.return_type() {
             println!("return type: {}", return_type);
         }
-
-        let body = &code_section.bodies()[i];
 
         for local in body.locals() {
             println!("local {}, type: {}", local.count(), local.value_type());

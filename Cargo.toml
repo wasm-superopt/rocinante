@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 clap = "*"
+itertools = "*"
 parity-wasm = "*"
 wabt = "*"
 wasmparser = "*"
