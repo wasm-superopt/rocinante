@@ -3,7 +3,7 @@ extern crate log;
 extern crate z3;
 
 use z3::{
-    ast::{forall_const, Ast, Bool, Datatype, Dynamic, Int, BV},
+    ast::{forall_const, Array, Ast, Bool, Datatype, Dynamic, Int, BV},
     Config, Context, DatatypeBuilder, FuncDecl, Pattern, SatResult, Solver, Sort,
 };
 
@@ -118,10 +118,35 @@ fn add_eq() {
     assert_eq!(solver.check(), SatResult::Sat);
 }
 
+fn local_init() {
+    let _ = env_logger::try_init();
+    let cfg = Config::new();
+    let ctx = Context::new(&cfg);
+
+    // Each parameter has a type explicitly declared.
+    let local_type = DatatypeBuilder::new(&ctx)
+        .variant("i32", &[("value", &Sort::int(&ctx))])
+        .variant("i64", &[("value", &Sort::int(&ctx))])
+        .variant("f32", &[("value", &Sort::int(&ctx))])
+        .variant("f64", &[("value", &Sort::int(&ctx))])
+        .finish("LocalType");
+
+    // Create an array of locals.
+    let locals = Array::new_const(&ctx, "locals", &Sort::int(&ctx), &local_type.sort);
+    // Param 0
+    locals.store(
+        &Int::from_i64(&ctx, 0).into(),
+        &local_type.variants[0]
+            .constructor
+            .apply(&[&Int::from_i64(&ctx, 2).into()]),
+    );
+}
+
 fn main() {
     simple();
     datatype();
     shift();
     add();
     add_eq();
+    local_init();
 }
