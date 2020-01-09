@@ -4,7 +4,7 @@ extern crate z3;
 
 use z3::{
     ast::{forall_const, Array, Ast, Bool, Datatype, Dynamic, Int, BV},
-    Config, Context, DatatypeBuilder, FuncDecl, Pattern, SatResult, Solver, Sort,
+    Config, Context, DatatypeBuilder, SatResult, Solver, Sort,
 };
 
 fn datatype() {
@@ -80,35 +80,23 @@ fn add() {
     let cfg = Config::new();
     let ctx = Context::new(&cfg);
     let x = Int::new_const(&ctx, "x");
+    let three = Int::from_i64(&ctx, 3);
     let solver = Solver::new(&ctx);
-    solver.assert(&x.add(&[&x])._eq(&x.mul(&[&Int::from_i64(&ctx, 2)])));
+    solver.assert(&x.add(&[&x])._eq(&x.mul(&[&three])));
 
     assert_eq!(solver.check(), SatResult::Sat);
-}
 
-fn add_eq() {
-    let _ = env_logger::try_init();
-    let cfg = Config::new();
-    let ctx = Context::new(&cfg);
-    let x = Int::new_const(&ctx, "x");
-    let solver = Solver::new(&ctx);
+    let model = solver.get_model();
 
-    let f1 = FuncDecl::new(&ctx, "f1", &[&Sort::int(&ctx)], &Sort::int(&ctx));
-    let f1_x: z3::ast::Int = f1.apply(&[&x.clone().into()]).as_int().unwrap();
-    let f1_x_pattern = Pattern::new(&ctx, &[&Dynamic::from_ast(&x.add(&[&x]))]);
+    assert_eq!(0, model.eval(&x).unwrap().as_i64().unwrap());
 
-    let f2 = FuncDecl::new(&ctx, "f2", &[&Sort::int(&ctx)], &Sort::int(&ctx));
-    let f2_x: z3::ast::Int = f2.apply(&[&x.clone().into()]).as_int().unwrap();
-    let f2_x_pattern = Pattern::new(
-        &ctx,
-        &[&Dynamic::from_ast(&x.mul(&[&Int::from_i64(&ctx, 2)]))],
-    );
+    let two = Int::from_i64(&ctx, 2);
 
     let forall: Bool = forall_const(
         &ctx,
         &[&x.clone().into()],
-        &[&f1_x_pattern, &f2_x_pattern],
-        &f1_x._eq(&f2_x).into(),
+        &[],
+        &x.add(&[&x])._eq(&x.mul(&[&two])).into(),
     )
     .as_bool()
     .unwrap();
@@ -142,11 +130,43 @@ fn local_init() {
     );
 }
 
+fn mimick_stack() {
+    let _ = env_logger::try_init();
+    let cfg = Config::new();
+    let ctx = Context::new(&cfg);
+    let solver = Solver::new(&ctx);
+
+    let mut vs_stack = Vec::new();
+
+    let x = Int::new_const(&ctx, "x");
+    vs_stack.push(Dynamic::from_ast(&x));
+
+    vs_stack.push(Dynamic::from_ast(&Int::from_i64(&ctx, 2)));
+
+    let lhs = vs_stack.pop().unwrap();
+    let rhs = vs_stack.pop().unwrap();
+
+    // Assuming that we're dealing with i32.mul
+    let mul_res = lhs.as_int().unwrap().mul(&[&rhs.as_int().unwrap()]);
+    vs_stack.push(Dynamic::from_ast(&mul_res));
+
+    let f1_res = vs_stack.pop().unwrap().as_int().unwrap();
+
+    let f2_res = x.add(&[&x]);
+
+    let forall = forall_const(&ctx, &[&x.clone().into()], &[], &f1_res._eq(&f2_res).into())
+        .as_bool()
+        .unwrap();
+
+    solver.assert(&forall);
+    assert_eq!(solver.check(), SatResult::Sat);
+}
+
 fn main() {
     simple();
     datatype();
     shift();
     add();
-    add_eq();
     local_init();
+    mimick_stack();
 }
