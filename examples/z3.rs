@@ -162,6 +162,32 @@ fn mimick_stack() {
     assert_eq!(solver.check(), SatResult::Sat);
 }
 
+fn synthesize() {
+    let _ = env_logger::try_init();
+    let cfg = Config::new();
+    let ctx = Context::new(&cfg);
+    let x = Int::new_const(&ctx, "x");
+    let c = Int::new_const(&ctx, "c");
+
+    let forall: Bool = forall_const(
+        &ctx,
+        &[&x.clone().into()],
+        &[],
+        &x.add(&[&x])._eq(&x.mul(&[&c])).into(),
+    )
+    .as_bool()
+    .unwrap();
+
+    let solver = Solver::new(&ctx);
+    solver.assert(&forall);
+
+    assert_eq!(solver.check(), SatResult::Sat);
+
+    let model = solver.get_model();
+
+    assert_eq!(2, model.eval(&c).unwrap().as_i64().unwrap());
+}
+
 fn main() {
     simple();
     datatype();
@@ -169,4 +195,5 @@ fn main() {
     add();
     local_init();
     mimick_stack();
+    synthesize();
 }
