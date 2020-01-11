@@ -3,6 +3,13 @@ name = "rocinante"
 version = "0.1.0"
 authors = ["Taegyun Kim <k.taegyun@gmail.com", "Anirudh Sivaraman <sk.anirudh@gmail.com>"]
 edition = "2018"
+readme = "README.md"
+categories = ["wasm"]
+repository = "https://github.com/wasm-superopt/rocinante"
+homepage = "https://github.com/wasm-superopt/rocinante"
+description = """
+A superoptimizer for WebAssembly
+"""
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
