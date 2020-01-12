@@ -1,6 +1,13 @@
-# Rocinante
+# `Rocinante`
 
-[Notes](https://www.notion.so/taegyunk/Superoptimizer-for-WebAssembly-5650ec352a9840a3b8f38af6fa75595d)
+## Install
+
+1. Install [Z3](https://github.com/Z3Prover/z3) theorem prover.
+
+    - Ubuntu: `sudo apt-get install libz3-dev z3`
+    - macOS: `brew install z3`
+
+2. Clone this repo.
 
 ## Usage
 ```shell
