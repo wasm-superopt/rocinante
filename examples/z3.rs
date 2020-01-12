@@ -84,6 +84,33 @@ fn shift() {
     assert_eq!(solver.check(), SatResult::Sat);
 }
 
+fn shift_int() {
+    // Z3 doesn't support shl on ints. Convert it to BV.
+    let _ = env_logger::try_init();
+    let cfg = Config::new();
+    let ctx = Context::new(&cfg);
+    let x = Int::new_const(&ctx, "x");
+    let one = BV::from_i64(&ctx, 1, 32);
+    let two = BV::from_i64(&ctx, 2, 32);
+
+    let forall = forall_const(
+        &ctx,
+        &[&x.clone().into()],
+        &[],
+        &BV::from_int(&x, 32)
+            .bvshl(&one)
+            .bvshl(&one)
+            ._eq(&BV::from_int(&x, 32).bvshl(&two))
+            .into(),
+    )
+    .as_bool()
+    .unwrap();
+    let solver = Solver::new(&ctx);
+    solver.assert(&forall);
+
+    assert_eq!(solver.check(), SatResult::Sat);
+}
+
 fn add() {
     let _ = env_logger::try_init();
     let cfg = Config::new();
@@ -201,6 +228,7 @@ fn main() {
     simple();
     datatype();
     shift();
+    shift_int();
     add();
     local_init();
     mimick_stack();
