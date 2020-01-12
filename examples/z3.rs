@@ -69,8 +69,17 @@ fn shift() {
     let one = BV::from_i64(&ctx, 1, 32);
     let two = BV::from_i64(&ctx, 2, 32);
 
+    let forall = forall_const(
+        &ctx,
+        &[&x.clone().into()],
+        &[],
+        &x.bvshl(&one).bvshl(&one)._eq(&x.bvshl(&two)).into(),
+    )
+    .as_bool()
+    .unwrap();
+
     let solver = Solver::new(&ctx);
-    solver.assert(&x.bvshl(&one).bvshl(&one)._eq(&x.bvshl(&two)));
+    solver.assert(&forall);
 
     assert_eq!(solver.check(), SatResult::Sat);
 }
