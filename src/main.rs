@@ -49,6 +49,10 @@ fn main() {
         "wast" | _ => panic!("{}: unrecognized file type", input),
     };
 
+    // Validate raw binary.
+    wasmparser::validate(&binary, None /* Uses default parser config */)
+        .expect("Failed to validate.");
+
     // Deserialize into an IR using parity-wasm.
     let module = Module::from_bytes(&binary).expect("Failed to deserialize.");
 
