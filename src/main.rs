@@ -1,13 +1,12 @@
-#[macro_use]
-extern crate itertools;
 extern crate clap;
+extern crate itertools;
 extern crate parity_wasm;
 extern crate wabt;
 extern crate wasmparser;
 extern crate wat;
 
 use clap::{App, Arg};
-use parity_wasm::elements::{Module, Type};
+use parity_wasm::elements::{ExportSection, Internal, Module};
 use std::env;
 use std::fs::File;
 use std::io;
@@ -20,6 +19,20 @@ fn read_wasm(file: &str) -> io::Result<Vec<u8>> {
     let mut f = File::open(file)?;
     f.read_to_end(&mut data)?;
     Ok(data)
+}
+
+fn get_func_name(export_section: &ExportSection, func_idx: u32) -> Option<&str> {
+    let export_entries = export_section.entries();
+
+    for entry in export_entries {
+        if let Internal::Function(idx) = entry.internal() {
+            if *idx == func_idx {
+                return Some(entry.field());
+            }
+        }
+    }
+
+    None
 }
 
 fn main() {
@@ -68,29 +81,35 @@ fn main() {
         .type_section()
         .expect("No type section in the module.");
 
+    let export_section = module
+        .export_section()
+        .expect("No export section in the module.");
+
     // We assume that the number of function signatures and function bodies are
     // the same in the module and the ordering is also the same.
     assert!(function_section.entries().len() == code_section.bodies().len());
 
-    for (func, body) in iproduct!(function_section.entries(), code_section.bodies()) {
-        let type_idx = func.type_ref();
-        let typ = &type_section.types()[type_idx as usize];
-        // Type section only contains function types, so coerce it to a
-        // FunctionType.
-        let Type::Function(func_type) = typ;
-        for (i, param_type) in func_type.params().iter().enumerate() {
-            println!("param {}, type: {}", i, param_type);
+    let num_func = function_section.entries().len();
+    for i in 0..num_func {
+        let func_sig = function_section.entries()[i];
+        let typ_idx = func_sig.type_ref();
+        let typ = &type_section.types()[typ_idx as usize];
+
+        let name_opt = get_func_name(export_section, i as u32);
+
+        if let Some(func_name) = name_opt {
+            println!("{}", func_name);
         }
 
-        if let Some(return_type) = func_type.return_type() {
-            println!("return type: {}", return_type);
-        }
+        println!("{:?}", typ);
 
-        for local in body.locals() {
-            println!("local {}, type: {}", local.count(), local.value_type());
-        }
-        for instr in body.code().elements() {
+        let func_body = &code_section.bodies()[i];
+        println!("{:?}", func_body.locals());
+
+        for instr in func_body.code().elements() {
             println!("{}", instr);
         }
+
+        println!();
     }
 }
