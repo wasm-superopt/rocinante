@@ -57,5 +57,5 @@ fn main() {
     // Deserialize into an IR using parity-wasm.
     let module = Module::from_bytes(&binary).expect("Failed to deserialize.");
 
-    debug::print_functions(module);
+    debug::print_functions(&module);
 }

@@ -1,11 +1,24 @@
-use parity_wasm::elements::{ExportSection, Internal, Module};
+use parity_wasm::elements::{Internal, Module, Type};
 
-fn get_func_name(export_section: &ExportSection, func_idx: u32) -> Option<&str> {
-    let export_entries = export_section.entries();
+fn import_entries_len(module: &Module) -> usize {
+    match module.import_section() {
+        Some(import_section) => import_section.entries().len(),
+        None => 0,
+    }
+}
 
-    for entry in export_entries {
+fn get_func_name(module: &Module, func_idx: usize) -> Option<&str> {
+    // https://webassembly.github.io/spec/core/syntax/modules.html#imports
+    // In each index space, the indices of imports go before the first index of
+    // any definition contained in the module itself.
+    let import_entries_len = import_entries_len(module);
+    let export_section = module
+        .export_section()
+        .expect("No export section in the module.");
+
+    for entry in export_section.entries() {
         if let Internal::Function(idx) = entry.internal() {
-            if *idx == func_idx {
+            if *idx == (func_idx + import_entries_len) as u32 {
                 return Some(entry.field());
             }
         }
@@ -14,7 +27,15 @@ fn get_func_name(export_section: &ExportSection, func_idx: u32) -> Option<&str> 
     None
 }
 
-pub fn print_functions(module: Module) {
+fn get_func_type(module: &Module, typ_idx: usize) -> &Type {
+    let type_section = module
+        .type_section()
+        .expect("No type section in the module.");
+
+    &type_section.types()[typ_idx]
+}
+
+pub fn print_functions(module: &Module) {
     let function_section = module
         .function_section()
         .expect("No function section in the module.");
@@ -22,14 +43,6 @@ pub fn print_functions(module: Module) {
     let code_section = module
         .code_section()
         .expect("No code section in the module.");
-
-    let type_section = module
-        .type_section()
-        .expect("No type section in the module.");
-
-    let export_section = module
-        .export_section()
-        .expect("No export section in the module.");
 
     // We assume that the number of function signatures and function bodies are
     // the same in the module and the ordering is also the same.
@@ -39,20 +52,28 @@ pub fn print_functions(module: Module) {
     for i in 0..num_func {
         let func_sig = function_section.entries()[i];
         let typ_idx = func_sig.type_ref();
-        let typ = &type_section.types()[typ_idx as usize];
+        let typ = get_func_type(module, typ_idx as usize);
 
-        let name_opt = get_func_name(export_section, i as u32);
+        let name_opt = get_func_name(module, i);
 
         if let Some(func_name) = name_opt {
             println!("{}", func_name);
         } else {
-            println!("Function name not found.");
+            println!("(anonymous function)");
         }
 
-        println!("{:?}", typ);
+        // Currently there is only one type.
+        let Type::Function(func_type) = typ;
+        println!(
+            "param types: {:?}, return type: {:?}",
+            func_type.params(),
+            func_type.return_type()
+        );
 
         let func_body = &code_section.bodies()[i];
-        println!("{:?}", func_body.locals());
+        if !func_body.locals().is_empty() {
+            println!("{:?}", func_body.locals());
+        }
 
         for instr in func_body.code().elements() {
             println!("{}", instr);
