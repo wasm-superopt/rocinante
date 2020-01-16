@@ -30,7 +30,7 @@ wabt = "*"
 wasmi =  "*"
 wasmparser = "*"
 wat = "*"
-z3 = "*"
+z3 = { git = "https://github.com/taegyunkim/z3.rs" }
 
 [dev-dependencies]
 anyhow = "*"
