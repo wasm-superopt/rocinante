@@ -71,7 +71,7 @@ fn shift() {
 
     let forall = forall_const(
         &ctx,
-        &[x.clone().into()],
+        &[&x.clone().into()],
         &[],
         &x.bvshl(&one).bvshl(&one)._eq(&x.bvshl(&two)).into(),
     )
@@ -95,7 +95,7 @@ fn shift_int() {
 
     let forall = forall_const(
         &ctx,
-        &[x.clone().into()],
+        &[&x.clone().into()],
         &[],
         &BV::from_int(&x, 32)
             .bvshl(&one)
@@ -130,7 +130,7 @@ fn add() {
 
     let forall: Bool = forall_const(
         &ctx,
-        &[x.clone().into()],
+        &[&x.clone().into()],
         &[],
         &x.add(&[&x])._eq(&x.mul(&[&two])).into(),
     )
@@ -190,7 +190,7 @@ fn mimick_stack() {
 
     let f2_res = x.add(&[&x]);
 
-    let forall = forall_const(&ctx, &[x.clone().into()], &[], &f1_res._eq(&f2_res).into())
+    let forall = forall_const(&ctx, &[&x.clone().into()], &[], &f1_res._eq(&f2_res).into())
         .as_bool()
         .unwrap();
 
@@ -207,7 +207,7 @@ fn synthesize() {
 
     let forall: Bool = forall_const(
         &ctx,
-        &[x.clone().into()],
+        &[&x.clone().into()],
         &[],
         &x.add(&[&x])._eq(&x.mul(&[&c])).into(),
     )

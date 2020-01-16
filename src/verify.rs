@@ -136,9 +136,13 @@ pub fn verify(func_type: &FunctionType, spec: &FuncBody, candidate: &FuncBody) -
 
     let solver = Solver::new(&ctx);
 
-    let bounds: Vec<ast::Dynamic> = shared_params.iter().map(|p| p.clone().into()).collect();
+    let bounds: Vec<ast::Dynamic> = shared_params
+        .iter()
+        .map(|p| p.clone().into())
+        .collect::<Vec<ast::Dynamic>>();
+    let bound_refs: Vec<&ast::Dynamic> = bounds.iter().collect::<Vec<&ast::Dynamic>>();
 
-    let forall = ast::forall_const(&ctx, &bounds, &[], &spec_f._eq(&candidate_f).into())
+    let forall = ast::forall_const(&ctx, &bound_refs, &[], &spec_f._eq(&candidate_f).into())
         .as_bool()
         .unwrap();
 
