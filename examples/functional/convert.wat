@@ -41,26 +41,38 @@
         (local i32 i32)
         ;; v0 = 3;
         ;; v1 = v0; // update the local table to refer v1 for l[1]
-        (local.set 1 (i32.const 3))
+        i32.const 3
+        set_local 1
         ;; v2 = 40;
         ;; v3 = v2; // update the local table to refer  v3 for l[3]
-        (local.set 3 (i32.const 40))
+        i32.const 40
+        set_local 3
 
-        ;; v4 = l[2];
-        ;; v5 = v3;
-        ;; v6 = v4 + v5;
-        ;; v7 = v1 + v6;
-        ;; v8 = l[0];
-        ;; v9 = v8 + v7;
-        (i32.add
-        (local.get 0)
-        (i32.add
-            (local.get 1)
-            (i32.add
-            (local.get 2)
-            (local.get 3)
-            )
-        )
-        )
+        ;; v4 = l[0];
+        get_local 0
+        ;; v5 = v1;
+        get_local 1
+        ;; v6 = l[2];
+        get_local 2
+        ;; v7 = v3;
+        get_local 3
+        ;; v8 = v6 + v7;
+        i32.add
+        ;; v9 = v5 + v8;
+        i32.add
+        ;; v10 = v4 + v9;
+        i32.add
+        ;; return v10;
+
+        ;; (i32.add
+        ;; (local.get 0)
+        ;; (i32.add
+        ;;     (local.get 1)
+        ;;     (i32.add
+        ;;     (local.get 2)
+        ;;     (local.get 3)
+        ;;     )
+        ;; )
+        ;; )
     )
 )
