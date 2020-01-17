@@ -1,8 +1,8 @@
 (module
     (type $t0 (func (result i32)))
-    ;; v0 = 1; 
+    ;; v0 = 1;
     ;; return v0;
-    ;; 
+    ;;
     ;; will translate back to
     ;; i32.const 1
     ;; local.set 0
@@ -11,7 +11,7 @@
         i32.const 1)
     ;; v1 = v0;
     ;; return v1
-    ;; 
+    ;;
     ;; will translate back to
     ;; local.get 0
     ;; local.set 1
@@ -23,7 +23,7 @@
     ;; v2 = v0;
     ;; v3 = v1 + v2;
     ;; return v3;
-    ;; 
+    ;;
     ;; will translate back to
     ;; local.get 0
     ;; local.set 1
@@ -67,6 +67,46 @@
     ;; i32.add
     ;; local.set 7
     ;; local.get 7
+    ;;
+    ;; hypothetically this can also be written as
+    ;; v1 = v0 + v0;
+    ;; v2 = v1 + v1;
+    ;; return v2;
+    ;;
+    ;; which will be translated to
+    ;; local.get 0
+    ;; local.get 0
+    ;; i32.add
+    ;; local.set 1
+    ;; local.get 1
+    ;; local.get 1
+    ;; i32.add
+    ;; local.set 2
+    ;; local.get 2
+    ;;
+    ;; Or simply
+    ;; v1 = 4;
+    ;; v2 = v1 * v0;
+    ;; return v2;
+    ;;
+    ;; and translated into
+    ;; i32.const 4
+    ;; local.set 1
+    ;; local.get 1
+    ;; local.get 0
+    ;; i32.mul
+    ;; local.set 2
+    ;; local.get 2
+    ;;
+    ;; Note that a sequence of
+    ;; local.set i
+    ;; local.get i
+    ;; can be removed if the rest of instructions don't use local i.
+    ;;
+    ;; So above can then be optimized into
+    ;; i32.const 4
+    ;; local.get 0
+    ;; i32.mul
     (func $get-set (export "get-set") (type $t1) (param $p0 i32)  (result i32)
         local.get $p0
         local.get $p0
@@ -77,7 +117,7 @@
         i32.add
         )
     (func $get-set-trans (export "get-set-trans") (type $t1) (param $p0 i32) (result i32)
-    (local i32 i32 i32 i32 i32 i32 i32) 
+    (local i32 i32 i32 i32 i32 i32 i32)
         local.get 0
         local.set 1
         local.get 0
@@ -161,7 +201,7 @@
         (if $l (local.get 0) (then))
         (if $l (local.get 0) (then) (else))
         ;; local.get 0
-        ;; if 
+        ;; if
         ;; end
         ;; local.get 0
         ;; if
