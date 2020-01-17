@@ -1,5 +1,4 @@
 extern crate clap;
-extern crate itertools;
 extern crate parity_wasm;
 extern crate wabt;
 extern crate wasmparser;

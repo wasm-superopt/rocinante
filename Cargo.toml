@@ -15,7 +15,6 @@ A superoptimizer for WebAssembly
 
 [dependencies]
 clap = "*"
-itertools = "*"
 parity-wasm = "*"
 wabt = "*"
 wasmparser = "*"
