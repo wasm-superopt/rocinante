@@ -15,7 +15,7 @@
 ## Usage
 
 ```shell
-cargo run -- <FILE>
+cargo run --bin print <FILE>
 ```
 
 1. Reads `.wat` or `.wasm` file into binary format.

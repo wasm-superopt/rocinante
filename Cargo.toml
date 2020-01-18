@@ -1,7 +1,10 @@
 [package]
 name = "rocinante"
 version = "0.1.0"
-authors = ["Taegyun Kim <k.taegyun@gmail.com", "Anirudh Sivaraman <sk.anirudh@gmail.com>"]
+authors = [
+    "Taegyun Kim <k.taegyun@gmail.com",
+    "Anirudh Sivaraman <sk.anirudh@gmail.com>"
+]
 edition = "2018"
 readme = "README.md"
 categories = ["wasm"]
@@ -11,7 +14,13 @@ description = """
 A superoptimizer for WebAssembly
 """
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "rocinante"
+path = "src/lib.rs"
+
+[[bin]]
+name = "print"
+path = "src/bin/print.rs"
 
 [dependencies]
 clap = "*"
@@ -19,6 +28,7 @@ parity-wasm = "*"
 wabt = "*"
 wasmparser = "*"
 wat = "*"
+z3 = "*"
 
 [dev-dependencies]
 anyhow = "*"
@@ -26,9 +36,14 @@ env_logger = "*"
 getopts = "*"
 log = "*"
 wasmprinter = "*"
-z3 = "*"
 
 [dev-dependencies.cargo-husky]
 version = "1"
 default-features = false # Disable features which are enabled by default
-features = ["run-for-all", "precommit-hook", "run-cargo-test", "run-cargo-fmt", "run-cargo-clippy"]
+features = [
+    "run-for-all",
+    "precommit-hook",
+    "run-cargo-test",
+    "run-cargo-fmt",
+    "run-cargo-clippy"
+]

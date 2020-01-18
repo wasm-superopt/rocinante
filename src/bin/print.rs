@@ -1,19 +1,19 @@
 extern crate clap;
 extern crate parity_wasm;
+extern crate rocinante;
 extern crate wabt;
 extern crate wasmparser;
 extern crate wat;
 
 use clap::{App, Arg};
 use parity_wasm::elements::Module;
+use rocinante::debug;
 use std::env;
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
 use std::path::Path;
 use std::str;
-
-mod debug;
 
 fn read_wasm(file: &str) -> io::Result<Vec<u8>> {
     let mut data = Vec::new();
