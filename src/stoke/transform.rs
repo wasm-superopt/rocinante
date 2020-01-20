@@ -1,15 +1,16 @@
-use parity_wasm::elements::Instruction;
+use parity_wasm::elements::{FuncBody, FunctionType, Instruction};
 use rand::distributions::{Distribution, Standard};
 use rand::seq::SliceRandom;
 use rand::Rng;
 
+#[allow(dead_code)]
 const I32UNOP: [Instruction; 3] = [
     Instruction::I32Clz,
     Instruction::I32Ctz,
     Instruction::I32Popcnt,
 ];
 
-const I32BINOP: [Instruction; 15] = [
+const I32BINOP: [Instruction; 7] = [
     Instruction::I32Add,
     Instruction::I32Sub,
     Instruction::I32Mul,
@@ -17,16 +18,17 @@ const I32BINOP: [Instruction; 15] = [
     Instruction::I32DivU,
     Instruction::I32RemS,
     Instruction::I32RemU,
-    Instruction::I32And,
-    Instruction::I32Or,
-    Instruction::I32Xor,
-    Instruction::I32Shl,
-    Instruction::I32ShrS,
-    Instruction::I32ShrU,
-    Instruction::I32Rotl,
-    Instruction::I32Rotr,
+    // Instruction::I32And,
+    // Instruction::I32Or,
+    // Instruction::I32Xor,
+    // Instruction::I32Shl,
+    // Instruction::I32ShrS,
+    // Instruction::I32ShrU,
+    // Instruction::I32Rotl,
+    // Instruction::I32Rotr,
 ];
 
+#[allow(dead_code)]
 const I32RELOP: [Instruction; 10] = [
     Instruction::I32Eq,
     Instruction::I32Ne,
@@ -40,14 +42,23 @@ const I32RELOP: [Instruction; 10] = [
     Instruction::I32GeU,
 ];
 
+#[allow(dead_code)]
+const VAROP: [fn(n: u32) -> Instruction; 3] = [
+    Instruction::GetLocal,
+    Instruction::SetLocal,
+    Instruction::TeeLocal,
+    // Instruction::GetGlobal,
+    // Instruction::SetGlobal,
+];
+
 pub fn get_equiv<R: Rng>(rng: &mut R, instr: &Instruction) -> Instruction {
     match instr {
-        _ if I32UNOP.contains(instr) => I32UNOP.choose(rng).unwrap().clone(),
+        // _ if I32UNOP.contains(instr) => I32UNOP.choose(rng).unwrap().clone(),
         _ if I32BINOP.contains(instr) => I32BINOP.choose(rng).unwrap().clone(),
-        _ if I32RELOP.contains(instr) => I32RELOP.choose(rng).unwrap().clone(),
-        Instruction::I32Eqz => Instruction::I32Eqz,
+        // _ if I32RELOP.contains(instr) => I32RELOP.choose(rng).unwrap().clone(),
+        // Instruction::I32Eqz => Instruction::I32Eqz,
         Instruction::End => Instruction::End,
-        _ => Instruction::Nop,
+        _ => panic!("get_equiv not implemented for {}", instr),
     }
 }
 
@@ -70,7 +81,7 @@ impl Distribution<Transform> for Standard {
     }
 }
 
-pub fn do_transform() {
+pub fn do_transform(_func_type: &FunctionType, _func_body: &mut FuncBody) {
     let transform: Transform = rand::random();
 
     match transform {
