@@ -1,7 +1,10 @@
-extern crate wasmi;
+use crate::utils;
+use rand::Rng;
+use wasmi::{nan_preserving_float, Error, ModuleInstance, NopExternals, RuntimeValue, ValueType};
 
-use wasmi::{Error, ModuleInstance, NopExternals, RuntimeValue};
+const NUM_TEST_CASES: usize = 10;
 
+#[derive(Clone, Debug)]
 pub struct Input(Vec<RuntimeValue>);
 
 impl Input {
@@ -13,6 +16,7 @@ impl Input {
     }
 }
 
+#[derive(Debug)]
 pub struct Output(Result<Option<RuntimeValue>, Error>);
 
 impl Output {
@@ -24,6 +28,7 @@ impl Output {
     }
 }
 
+#[derive(Debug)]
 pub struct TestCases(Vec<(Input, Output)>);
 
 impl TestCases {
@@ -33,10 +38,43 @@ impl TestCases {
     pub fn elements(&self) -> &[(Input, Output)] {
         &self.0
     }
+    pub fn add_element(&mut self, test_case: (Input, Output)) {
+        self.0.push(test_case)
+    }
 }
 
-pub fn generate_test_cases(instance: &ModuleInstance, func_name: &str) {
-    let inputs: Vec<Input> = Vec::new();
+fn gen_random_input<R: Rng>(rng: &mut R, param_types: &[ValueType]) -> Input {
+    let mut args: Vec<RuntimeValue> = Vec::with_capacity(param_types.len());
+
+    for param_type in param_types {
+        let arg = match param_type {
+            ValueType::I32 => RuntimeValue::I32(rng.gen::<i32>()),
+            ValueType::I64 => RuntimeValue::I64(rng.gen::<i64>()),
+            ValueType::F32 => {
+                RuntimeValue::F32(nan_preserving_float::F32::from_float(rng.gen::<f32>()))
+            }
+            ValueType::F64 => {
+                RuntimeValue::F64(nan_preserving_float::F64::from_float(rng.gen::<f64>()))
+            }
+        };
+        args.push(arg);
+    }
+
+    Input::new(args)
+}
+
+pub fn generate_test_cases<R: Rng>(
+    rng: &mut R,
+    instance: &ModuleInstance,
+    func_name: &str,
+) -> TestCases {
+    let func = utils::func_by_name(instance, func_name).unwrap();
+    let signature = func.signature();
+
+    let mut inputs: Vec<Input> = Vec::with_capacity(NUM_TEST_CASES);
+    for _ in 0..NUM_TEST_CASES {
+        inputs.push(gen_random_input(rng, signature.params()));
+    }
 
     let mut test_cases: Vec<(Input, Output)> = Vec::new();
 
@@ -46,4 +84,6 @@ pub fn generate_test_cases(instance: &ModuleInstance, func_name: &str) {
 
         test_cases.push((input, output));
     }
+
+    TestCases::new(test_cases)
 }

@@ -25,6 +25,7 @@ path = "src/bin/print.rs"
 [dependencies]
 clap = "*"
 parity-wasm = "*"
+rand = "*"
 wabt = "*"
 wasmi =  "*"
 wasmparser = "*"
