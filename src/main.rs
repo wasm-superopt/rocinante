@@ -71,5 +71,8 @@ fn main() {
 
     if let Some(_matches) = matches.subcommand_matches("print") {
         debug::print_functions(&module);
+    } else {
+        let optimizer = stoke::Optimizer::new(module);
+        optimizer.run();
     }
 }
