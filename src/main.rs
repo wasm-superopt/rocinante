@@ -22,6 +22,7 @@ pub mod debug;
 pub mod exec;
 mod parity_wasm_utils;
 pub mod solver;
+pub mod stoke;
 mod wasmi_utils;
 
 fn read_wasm(file: &str) -> io::Result<Vec<u8>> {
