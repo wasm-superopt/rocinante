@@ -67,15 +67,13 @@ mod tests {
     #[test]
     fn test_invoke() {
         let wasm_binary: Vec<u8> = wabt::wat2wasm(
-            r#"
-            (module
+            r#"(module
                 (type $t0 (func (param i32) (result i32)))
                 (func $div (type $t0) (param $p0 i32) (result i32)
                   i32.const 4
                   get_local $p0
                   i32.div_u)
-                (export "div" (func $div)))
-                              "#,
+                (export "div" (func $div)))"#,
         )
         .expect("failed to parse wat");
 
@@ -110,6 +108,8 @@ mod tests {
             assert_eq!(expected_input, actual_input);
 
             if expected_output.is_err() {
+                // wasmi::Error doesn't implement PartiqlEq and can't directly
+                // be tested for equality, so conver to String.
                 assert_eq!(
                     expected_output.as_ref().err().unwrap().to_string(),
                     actual_output.as_ref().err().unwrap().to_string(),
