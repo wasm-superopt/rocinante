@@ -1,12 +1,13 @@
-use crate::wasmi_utils;
 use rand::Rng;
-use wasmi::{nan_preserving_float, Error, ModuleInstance, NopExternals, RuntimeValue, ValueType};
+use wasmi::{
+    nan_preserving_float, FuncInstance, FuncRef, NopExternals, RuntimeValue, Trap, ValueType,
+};
 
 const NUM_TEST_CASES: usize = 10;
 
 type Input = Vec<RuntimeValue>;
 
-type Output = Result<Option<RuntimeValue>, Error>;
+type Output = Result<Option<RuntimeValue>, Trap>;
 
 type TestCases = Vec<(Input, Output)>;
 
@@ -30,32 +31,23 @@ fn gen_random_input<R: Rng>(rng: &mut R, param_types: &[ValueType]) -> Input {
     inputs
 }
 
-pub fn generate_test_cases<R: Rng>(
-    rng: &mut R,
-    instance: &ModuleInstance,
-    func_name: &str,
-) -> TestCases {
-    let func = wasmi_utils::func_by_name(instance, func_name).unwrap();
-    let signature = func.signature();
+pub fn generate_test_cases<R: Rng>(rng: &mut R, func_ref: &FuncRef) -> TestCases {
+    let signature = func_ref.signature();
 
     let mut inputs: Vec<Input> = Vec::with_capacity(NUM_TEST_CASES);
     for _ in 0..NUM_TEST_CASES {
         inputs.push(gen_random_input(rng, signature.params()));
     }
 
-    let outputs = invoke_with_inputs(instance, func_name, &inputs);
+    let outputs = invoke_with_inputs(func_ref, &inputs);
 
     inputs.into_iter().zip(outputs.into_iter()).collect()
 }
 
-pub fn invoke_with_inputs(
-    instance: &ModuleInstance,
-    func_name: &str,
-    inputs: &[Input],
-) -> Vec<Output> {
-    let mut outputs: Vec<Output> = Vec::new();
+pub fn invoke_with_inputs(func_ref: &FuncRef, inputs: &[Input]) -> Vec<Output> {
+    let mut outputs: Vec<Output> = Vec::with_capacity(inputs.len());
     for input in inputs {
-        let output = instance.invoke_export(func_name, input, &mut NopExternals);
+        let output = FuncInstance::invoke(func_ref, input, &mut NopExternals);
         outputs.push(output);
     }
     outputs
@@ -64,7 +56,8 @@ pub fn invoke_with_inputs(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use wasmi::ImportsBuilder;
+    use crate::wasmi_utils;
+    use wasmi::{ImportsBuilder, ModuleInstance};
 
     #[test]
     fn test_invoke() {
@@ -92,12 +85,11 @@ mod tests {
 
         let expected_output: Vec<Output> = vec![
             Result::Ok(Some(RuntimeValue::I32(2))),
-            Result::Err(Error::Trap(wasmi::Trap::new(
-                wasmi::TrapKind::DivisionByZero,
-            ))),
+            Result::Err(wasmi::Trap::new(wasmi::TrapKind::DivisionByZero)),
         ];
 
-        let actual_outputs = invoke_with_inputs(&instance, "div", &inputs);
+        let div_func = wasmi_utils::func_by_name(&instance, "div").unwrap();
+        let actual_outputs = invoke_with_inputs(&div_func, &inputs);
 
         assert_eq!(inputs.len(), actual_outputs.len());
         for (i, actual_output) in actual_outputs.iter().enumerate() {
