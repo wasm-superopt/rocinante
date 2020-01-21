@@ -43,20 +43,22 @@ pub fn generate_test_cases<R: Rng>(
         inputs.push(gen_random_input(rng, signature.params()));
     }
 
-    invoke_with_inputs(instance, func_name, &inputs)
+    let outputs = invoke_with_inputs(instance, func_name, &inputs);
+
+    inputs.into_iter().zip(outputs.into_iter()).collect()
 }
 
 pub fn invoke_with_inputs(
     instance: &ModuleInstance,
     func_name: &str,
     inputs: &[Input],
-) -> TestCases {
-    let mut test_cases: Vec<(Input, Output)> = Vec::new();
+) -> Vec<Output> {
+    let mut outputs: Vec<Output> = Vec::new();
     for input in inputs {
         let output = instance.invoke_export(func_name, input, &mut NopExternals);
-        test_cases.push((input.clone(), output));
+        outputs.push(output);
     }
-    test_cases
+    outputs
 }
 
 #[cfg(test)]
@@ -86,8 +88,7 @@ mod tests {
             .expect("failed to instantiate wasm module")
             .assert_no_start();
 
-        let expected_input: Vec<Input> =
-            vec![vec![RuntimeValue::I32(2)], vec![RuntimeValue::I32(0)]];
+        let inputs: Vec<Input> = vec![vec![RuntimeValue::I32(2)], vec![RuntimeValue::I32(0)]];
 
         let expected_output: Vec<Output> = vec![
             Result::Ok(Some(RuntimeValue::I32(2))),
@@ -96,16 +97,11 @@ mod tests {
             ))),
         ];
 
-        let test_cases = invoke_with_inputs(&instance, "div", &expected_input);
+        let actual_outputs = invoke_with_inputs(&instance, "div", &inputs);
 
-        assert_eq!(expected_input.len(), test_cases.len());
-        for i in 0..expected_input.len() {
-            let expected_input = &expected_input[i];
+        assert_eq!(inputs.len(), actual_outputs.len());
+        for (i, actual_output) in actual_outputs.iter().enumerate() {
             let expected_output = &expected_output[i];
-
-            let (actual_input, actual_output) = &test_cases[i];
-
-            assert_eq!(expected_input, actual_input);
 
             if expected_output.is_err() {
                 // wasmi::Error doesn't implement PartiqlEq and can't directly
