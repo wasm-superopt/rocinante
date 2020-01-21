@@ -17,7 +17,7 @@ impl Optimizer {
     /// Finds a module that has functions equivalent to the functions in the given module.
     pub fn synthesize(&self) {
         // for func in module.functions {
-        //   let test_cases = generate_teset_cases(func)
+        //   let test_cases = generate_test_cases(func)
         //   let candidate = generate_random_func(func.type);
         //     while (!candidate.validate()) {
         //       do_transform(candidate)
