@@ -45,10 +45,8 @@ impl Superoptimizer {
                 let _signature = func_ref.signature();
 
                 //  loop {
-                //      while(!generator.module.validate()) {
-                //          generator.do_transform()
-                //      }
                 //      if eval_test_cases(generator.module, test_cases) > 0 {
+                //          generator.do_transform()
                 //          continue
                 //      }
                 //      match verify_equivalence(func_ref, generator.module.func()) {
@@ -100,6 +98,33 @@ impl Generator {
 
     pub fn module(&self) -> &EModule {
         &self.module
+    }
+
+    pub fn eval_test_cases(&self, test_cases: &[(exec::Input, exec::Output)]) -> u32 {
+        // The module is validated this step.
+        let module_or_err = wasmi::Module::from_parity_wasm_module(self.module.clone());
+        if module_or_err.is_err() {
+            // Compute the hamming distance
+            return 10;
+        }
+        let module = module_or_err.unwrap();
+        let instance_or_err =
+            wasmi::ModuleInstance::new(&module, &wasmi::ImportsBuilder::default());
+        if instance_or_err.is_err() {
+            // Compute the hamming distance
+            return 10;
+        }
+        let instance = instance_or_err.unwrap().assert_no_start();
+        let candidate_func = utils::func_by_name(&instance, "candidate").unwrap();
+
+        let mut dist = 0;
+        for (input, expected_output) in test_cases {
+            let actual_output =
+                wasmi::FuncInstance::invoke(&candidate_func, input, &mut wasmi::NopExternals);
+            dist += exec::hamming_distance(expected_output, &actual_output);
+        }
+
+        dist
     }
 }
 

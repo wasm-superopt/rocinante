@@ -5,11 +5,40 @@ use wasmi::{
 
 const NUM_TEST_CASES: usize = 10;
 
-type Input = Vec<RuntimeValue>;
+pub type Input = Vec<RuntimeValue>;
 
-type Output = Result<Option<RuntimeValue>, Trap>;
+pub type Output = Result<Option<RuntimeValue>, Trap>;
 
-type TestCases = Vec<(Input, Output)>;
+pub fn hamming_distance(output1: &Output, output2: &Output) -> u32 {
+    match (output1, output2) {
+        (Ok(val_opt1), Ok(val_opt2)) => match (val_opt1, val_opt2) {
+            (None, None) => 0,
+            (Some(val1), Some(val2)) => match (val1, val2) {
+                (RuntimeValue::I32(x), RuntimeValue::I32(y)) => (x ^ y).count_ones(),
+                (RuntimeValue::I64(x), RuntimeValue::I64(y)) => (x ^ y).count_ones(),
+                (RuntimeValue::F32(x), RuntimeValue::F32(y)) => {
+                    (x.to_bits() ^ y.to_bits()).count_ones()
+                }
+                (RuntimeValue::F64(x), RuntimeValue::F64(y)) => {
+                    (x.to_bits() ^ y.to_bits()).count_ones()
+                }
+                _ => panic!("Spec and candidate function return type don't match."),
+            },
+            _ => panic!("Spec and candidate function return type don't match."),
+        },
+        (Ok(_), Err(_)) => 32,
+        (Err(_), Ok(_)) => 32,
+        (Err(err1), Err(err2)) => {
+            if err1.to_string() == err2.to_string() {
+                0
+            } else {
+                32
+            }
+        }
+    }
+}
+
+pub type TestCases = Vec<(Input, Output)>;
 
 fn gen_random_input<R: Rng>(rng: &mut R, param_types: &[ValueType]) -> Input {
     let mut inputs = Vec::with_capacity(param_types.len());
