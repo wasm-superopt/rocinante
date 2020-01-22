@@ -2,7 +2,7 @@ use crate::{exec, parity_wasm_utils, wasmi_utils};
 use parity_wasm::elements::{Internal, Module};
 use rand::Rng;
 
-pub mod transform;
+pub mod generator;
 
 #[allow(dead_code)]
 pub struct Optimizer {
