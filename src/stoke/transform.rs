@@ -1,4 +1,4 @@
-use parity_wasm::elements::{FuncBody, FunctionType, Instruction};
+use parity_wasm::elements::Instruction;
 use rand::distributions::{Distribution, Standard};
 use rand::seq::SliceRandom;
 use rand::Rng;
@@ -77,29 +77,6 @@ impl Distribution<Transform> for Standard {
             1 => Transform::Operand,
             2 => Transform::Swap,
             _ => Transform::Instruction,
-        }
-    }
-}
-
-pub fn do_transform(_func_type: &FunctionType, _func_body: &mut FuncBody) {
-    let transform: Transform = rand::random();
-
-    match transform {
-        Transform::Opcode => {
-            // Choose an instruction at random, and replace with a random,
-            // equivalent one.
-        }
-        Transform::Operand => {
-            // Select an instruction at random, and its operand is replaced by a
-            // random operand drawn from an equivalence class of operands.
-        }
-        Transform::Swap => {
-            // Select two instructions from the set of original instructions
-            // union with Nop, and swap
-        }
-        Transform::Instruction => {
-            // Select an instruction, and replace with a random instruction,
-            // with random operands.
         }
     }
 }
