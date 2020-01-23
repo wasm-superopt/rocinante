@@ -1,7 +1,7 @@
 use parity_wasm::elements::{FuncBody, FunctionType, Instruction, Local, ValueType};
 use std::convert::TryFrom;
 use std::fmt::Debug;
-use z3::{ast, Context};
+use z3::{ast, ast::Ast, Context, Solver};
 
 #[derive(Debug, Default)]
 pub struct ValueStack<'ctx>(Vec<ast::Dynamic<'ctx>>);
@@ -64,6 +64,10 @@ impl<'ctx> Converter<'ctx> {
         }
     }
 
+    pub fn bounds(&self) -> Vec<&ast::Dynamic<'ctx>> {
+        self.params.iter().collect::<Vec<&ast::Dynamic<'ctx>>>()
+    }
+
     fn init_locals(&self, local_types: &[Local]) -> Vec<ast::Dynamic<'ctx>> {
         let mut locals = self.params.clone();
         locals.reserve(local_types.len());
@@ -87,7 +91,7 @@ impl<'ctx> Converter<'ctx> {
         locals
     }
 
-    pub fn convert_func(&self, func: &FuncBody) -> Option<ast::Dynamic<'ctx>> {
+    pub fn convert_func(&self, func: &FuncBody) -> ast::Dynamic<'ctx> {
         let mut locals = self.init_locals(func.locals());
         let mut stack: ValueStack<'ctx> = ValueStack::new();
         for instr in func.code().elements() {
@@ -197,8 +201,55 @@ impl<'ctx> Converter<'ctx> {
         }
 
         match self.return_type {
-            Some(_) => Some(stack.pop()),
-            None => None,
+            Some(_) => stack.pop(),
+            None => panic!("Doens't support void functions."),
+        }
+    }
+}
+
+pub enum VerifyResult {
+    Verified,
+    CounterExample,
+}
+
+pub struct Z3Solver<'ctx> {
+    ctx: &'ctx Context,
+    converter: Converter<'ctx>,
+    spec_f: ast::Dynamic<'ctx>,
+}
+
+impl<'ctx> Z3Solver<'ctx> {
+    pub fn new(ctx: &'ctx Context, func_type: &FunctionType, spec: &FuncBody) -> Self {
+        let converter = Converter::new(ctx, func_type);
+        let spec_f = converter.convert_func(spec);
+        Self {
+            ctx,
+            converter,
+            spec_f,
+        }
+    }
+
+    pub fn verify(&self, candidate: &FuncBody) -> VerifyResult {
+        let candidate_f = self.converter.convert_func(candidate);
+        let solver = Solver::new(&self.ctx);
+        let bounds = self.converter.bounds();
+
+        let forall = ast::forall_const(
+            &self.ctx,
+            &bounds,
+            &[],
+            &self.spec_f._eq(&candidate_f).into(),
+        )
+        .as_bool()
+        .unwrap();
+
+        solver.assert(&forall);
+
+        match solver.check() {
+            z3::SatResult::Sat => VerifyResult::Verified,
+            _ => {
+                panic!("Failed to verif");
+            }
         }
     }
 }

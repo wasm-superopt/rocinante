@@ -1,1 +1,2 @@
-pub mod z3;
+pub use self::z3::*;
+mod z3;
