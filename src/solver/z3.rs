@@ -3,6 +3,8 @@ use std::convert::TryFrom;
 use std::fmt::Debug;
 use z3::{ast, ast::Ast, Context, Solver};
 
+// NOTE(taegyunkim): Consider also putting locals in value stack, and keeping a
+// stack pointer to push and pop values.
 #[derive(Debug, Default)]
 pub struct ValueStack<'ctx>(Vec<ast::Dynamic<'ctx>>);
 
@@ -37,6 +39,7 @@ impl<'ctx> ValueStack<'ctx> {
     }
 }
 
+#[derive(Debug)]
 pub struct Converter<'ctx> {
     ctx: &'ctx Context,
     params: Vec<ast::Dynamic<'ctx>>,
@@ -81,6 +84,8 @@ impl<'ctx> Converter<'ctx> {
                     // Initial value of any local is 0.
                     ValueType::I32 => locals.push(ast::BV::from_u64(&self.ctx, 0, 32).into()),
                     ValueType::I64 => locals.push(ast::BV::from_u64(&self.ctx, 0, 64).into()),
+                    // NOTE(taegyunkim): z3.rs doesn't provide wrappers for Z3
+                    // floats. We first need to implement those in z3.rs
                     _ => {
                         panic!("float not supported.");
                     }
@@ -91,6 +96,7 @@ impl<'ctx> Converter<'ctx> {
         locals
     }
 
+    // TODO(taegyunkim): Add test for each case.
     pub fn convert_func(&self, func: &FuncBody) -> ast::Dynamic<'ctx> {
         let mut locals = self.init_locals(func.locals());
         let mut stack: ValueStack<'ctx> = ValueStack::new();
@@ -259,6 +265,8 @@ impl<'ctx> Z3Solver<'ctx> {
 #[cfg(test)]
 mod tests {
     use super::{VerifyResult, Z3Solver};
+
+    // TODO(taegyunkim): Consider moving these helper functions into a separate module.
     fn export_by_name(
         export_section: &parity_wasm::elements::ExportSection,
         name: &str,
