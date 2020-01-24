@@ -22,7 +22,8 @@ impl Superoptimizer {
 
     /// Finds a module that has functions equivalent to the functions in the given module.
     pub fn synthesize(&self, rng: &mut impl Rng) {
-        // Module in wasmi, WASM interpreter.
+        // Module in wasmi, WASM interpreter. Instantiate this here and pass
+        // down to exec module functions to avoid re-instantiation.
         let wasmi_module = wasmi::Module::from_parity_wasm_module(self.module.clone())
             .expect("Failed to load parity-wasm Module.");
         let instance = wasmi::ModuleInstance::new(&wasmi_module, &wasmi::ImportsBuilder::default())
@@ -33,16 +34,15 @@ impl Superoptimizer {
             .module
             .export_section()
             .expect("Module doesn't have export section.");
-        let _num_imports = parity_wasm_utils::import_entries_len(&self.module);
 
         for export_entry in export_section.entries() {
             if let EInternal::Function(_idx) = export_entry.internal() {
                 let func_name = export_entry.field();
-                let func_ref = wasmi_utils::func_by_name(&instance, func_name).unwrap();
 
-                let _test_cases = exec::generate_test_cases(rng, &func_ref);
-
-                let _signature = func_ref.signature();
+                let _test_cases = exec::generate_test_cases(rng, &instance, func_name);
+                // let _generator = Generator::new(&func_type);
+                let (_func_type, _func_body) =
+                    parity_wasm_utils::func_by_name(&self.module, func_name);
 
                 //  loop {
                 //      if eval_test_cases(generator.module, test_cases) > 0 {
@@ -115,7 +115,7 @@ impl Generator {
             return 10;
         }
         let instance = instance_or_err.unwrap().assert_no_start();
-        let candidate_func = utils::func_by_name(&instance, "candidate").unwrap();
+        let candidate_func = wasmi_utils::func_by_name(&instance, "candidate").unwrap();
 
         let mut dist = 0;
         for (input, expected_output) in test_cases {

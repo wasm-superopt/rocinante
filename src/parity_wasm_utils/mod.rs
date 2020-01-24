@@ -33,7 +33,6 @@ pub fn get_function_type<'module>(
     func_type
 }
 
-#[allow(dead_code)]
 pub fn func_by_name<'module>(
     module: &'module Module,
     func_name: &str,

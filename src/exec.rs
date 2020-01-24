@@ -1,3 +1,4 @@
+use crate::wasmi_utils;
 use rand::Rng;
 use wasmi::{
     nan_preserving_float, FuncInstance, FuncRef, NopExternals, RuntimeValue, Trap, ValueType,
@@ -60,7 +61,13 @@ fn gen_random_input<R: Rng>(rng: &mut R, param_types: &[ValueType]) -> Input {
     inputs
 }
 
-pub fn generate_test_cases<R: Rng>(rng: &mut R, func_ref: &FuncRef) -> TestCases {
+pub fn generate_test_cases<R: Rng>(
+    rng: &mut R,
+    instance: &wasmi::ModuleInstance,
+    func_name: &str,
+) -> TestCases {
+    let func_ref = wasmi_utils::func_by_name(instance, func_name)
+        .unwrap_or_else(|_| panic!("Module doesn't have function named {}", func_name));
     let signature = func_ref.signature();
 
     let mut inputs: Vec<Input> = Vec::with_capacity(NUM_TEST_CASES);
@@ -68,7 +75,7 @@ pub fn generate_test_cases<R: Rng>(rng: &mut R, func_ref: &FuncRef) -> TestCases
         inputs.push(gen_random_input(rng, signature.params()));
     }
 
-    let outputs = invoke_with_inputs(func_ref, &inputs);
+    let outputs = invoke_with_inputs(&func_ref, &inputs);
 
     inputs.into_iter().zip(outputs.into_iter()).collect()
 }
