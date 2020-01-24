@@ -1,7 +1,8 @@
-use crate::{exec, parity_wasm_utils, wasmi_utils};
+use crate::{exec, parity_wasm_utils, solver, wasmi_utils};
 use parity_wasm::elements::{
-    FunctionType as EFunctionType, Instruction as EInstruction, Instructions as EInstructions,
-    Internal as EInternal, Module as EModule, ValueType as EValueType,
+    FuncBody as EFuncBody, FunctionType as EFunctionType, Instruction as EInstruction,
+    Instructions as EInstructions, Internal as EInternal, Module as EModule,
+    ValueType as EValueType,
 };
 use rand::Rng;
 
@@ -39,24 +40,32 @@ impl Superoptimizer {
             if let EInternal::Function(_idx) = export_entry.internal() {
                 let func_name = export_entry.field();
 
-                let _test_cases = exec::generate_test_cases(rng, &instance, func_name);
+                let test_cases = exec::generate_test_cases(rng, &instance, func_name);
                 // let _generator = Generator::new(&func_type);
-                let (_func_type, _func_body) =
+                let (func_type, func_body) =
                     parity_wasm_utils::func_by_name(&self.module, func_name);
 
-                //  loop {
-                //      if eval_test_cases(generator.module, test_cases) > 0 {
-                //          generator.do_transform()
-                //          continue
-                //      }
-                //      match verify_equivalence(func_ref, generator.module.func()) {
-                //          Verified => break,
-                //          CounterExample(inputs) => {
-                //              let expected_ouptut = func_ref.invoke_with(inputs);
-                //              test_caes.push((inputs, output));
-                //          }
-                //      }
-                //  }
+                let cfg = z3::Config::new();
+                let ctx = z3::Context::new(&cfg);
+                let z3solver = solver::Z3Solver::new(&ctx, func_type, func_body);
+                let generator = Generator::new(func_type);
+
+                loop {
+                    if generator.eval_test_cases(&test_cases) > 0 {
+                        generator.do_transform();
+                        continue;
+                    }
+                    match z3solver.verify(generator.get_candidate_func()) {
+                        solver::VerifyResult::Verified => {
+                            // collect the function from generator
+                            break;
+                        }
+                        solver::VerifyResult::CounterExample => {
+                            // Add input, output pair to the test cases.
+                            generator.do_transform()
+                        }
+                    }
+                }
             }
         }
     }
@@ -98,6 +107,11 @@ impl Generator {
 
     pub fn module(&self) -> &EModule {
         &self.module
+    }
+
+    pub fn get_candidate_func(&self) -> &EFuncBody {
+        let (_, candidate) = parity_wasm_utils::func_by_name(&self.module, "candidate");
+        candidate
     }
 
     pub fn eval_test_cases(&self, test_cases: &[(exec::Input, exec::Output)]) -> u32 {
