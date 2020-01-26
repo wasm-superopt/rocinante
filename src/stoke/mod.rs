@@ -61,7 +61,7 @@ impl Superoptimizer {
                             debug::print_functions(generator.module());
                             break;
                         }
-                        solver::VerifyResult::CounterExample => {
+                        solver::VerifyResult::CounterExample(_) => {
                             // Add input, output pair to the test cases.
                             generator.do_transform(rng)
                         }
