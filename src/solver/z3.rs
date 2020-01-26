@@ -383,6 +383,10 @@ mod tests {
                 .invoke_export("mul", &cex_vec, &mut wasmi::NopExternals)
                 .unwrap();
             assert_ne!(spec_output, candidate_output);
+
+            // Pass --nocapture to check following output.
+            // $> cargo test -- --nocapture
+            // [I32(-1)] Some(I32(-2)) Some(I32(-3))
             println!("{:?} {:?} {:?}", cex_vec, spec_output, candidate_output);
         }
     }
