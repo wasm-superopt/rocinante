@@ -1,4 +1,4 @@
-use crate::utils;
+use crate::wasmi_utils;
 use rand::Rng;
 use wasmi::{nan_preserving_float, Error, ModuleInstance, NopExternals, RuntimeValue, ValueType};
 
@@ -35,7 +35,7 @@ pub fn generate_test_cases<R: Rng>(
     instance: &ModuleInstance,
     func_name: &str,
 ) -> TestCases {
-    let func = utils::func_by_name(instance, func_name).unwrap();
+    let func = wasmi_utils::func_by_name(instance, func_name).unwrap();
     let signature = func.signature();
 
     let mut inputs: Vec<Input> = Vec::with_capacity(NUM_TEST_CASES);

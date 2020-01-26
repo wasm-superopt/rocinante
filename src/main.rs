@@ -1,19 +1,25 @@
 extern crate clap;
 extern crate parity_wasm;
-extern crate rocinante;
+extern crate rand;
 extern crate wabt;
+extern crate wasmi;
 extern crate wasmparser;
 extern crate wat;
 
-use clap::{App, Arg};
+use clap::{App, Arg, SubCommand};
 use parity_wasm::elements::Module;
-use rocinante::debug;
 use std::env;
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
 use std::path::Path;
 use std::str;
+
+pub mod debug;
+pub mod exec;
+mod parity_wasm_utils;
+pub mod solver;
+mod wasmi_utils;
 
 fn read_wasm(file: &str) -> io::Result<Vec<u8>> {
     let mut data = Vec::new();
@@ -32,6 +38,9 @@ fn main() {
                 .help(".wasm/.wat file to optimize")
                 .required(true)
                 .index(1),
+        )
+        .subcommand(
+            SubCommand::with_name("print").about("Prints all functions in the given module."),
         )
         .get_matches();
 
@@ -56,5 +65,7 @@ fn main() {
     // Deserialize into an IR using parity-wasm.
     let module = Module::from_bytes(&binary).expect("Failed to deserialize.");
 
-    debug::print_functions(&module);
+    if let Some(_matches) = matches.subcommand_matches("print") {
+        debug::print_functions(&module);
+    }
 }
