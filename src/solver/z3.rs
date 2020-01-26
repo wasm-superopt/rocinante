@@ -265,79 +265,8 @@ impl<'ctx> Z3Solver<'ctx> {
 #[cfg(test)]
 mod tests {
     use super::{VerifyResult, Z3Solver};
+    use crate::parity_wasm_utils;
 
-    // TODO(taegyunkim): Consider moving these helper functions into a separate module.
-    fn export_by_name(
-        export_section: &parity_wasm::elements::ExportSection,
-        name: &str,
-    ) -> Option<parity_wasm::elements::ExportEntry> {
-        for entry in export_section.entries() {
-            if entry.field() == name {
-                return Some(entry.clone());
-            }
-        }
-        None
-    }
-
-    fn import_entries_len(module: &parity_wasm::elements::Module) -> u32 {
-        let import_section_or_err = module.import_section();
-
-        match import_section_or_err {
-            Some(import_section) => import_section.entries().len() as u32,
-            None => 0,
-        }
-    }
-
-    fn get_function_type<'module>(
-        module: &'module parity_wasm::elements::Module,
-        signature: &'module parity_wasm::elements::Func,
-    ) -> &'module parity_wasm::elements::FunctionType {
-        let type_idx = signature.type_ref() as usize;
-
-        let type_section = module
-            .type_section()
-            .expect("Module doesn't contain type section.");
-        let raw_type = &type_section.types()[type_idx];
-        // There is only one type.
-        let parity_wasm::elements::Type::Function(func_type) = raw_type;
-        func_type
-    }
-
-    fn func_by_name<'module>(
-        module: &'module parity_wasm::elements::Module,
-        func_name: &str,
-    ) -> (
-        &'module parity_wasm::elements::FunctionType,
-        &'module parity_wasm::elements::FuncBody,
-    ) {
-        let export_section = module
-            .export_section()
-            .expect("Module doesn't contain export section.");
-        let export_entry = export_by_name(export_section, func_name)
-            .expect(&format!("Module doesn't have export {}", func_name));
-        let mut func_idx: u32 = match export_entry.internal() {
-            parity_wasm::elements::Internal::Function(idx) => *idx,
-            unexpected => panic!(
-                "Export {} is not a function, but {:?}",
-                func_name, unexpected
-            ),
-        };
-        func_idx -= import_entries_len(module);
-        let func_idx = func_idx as usize;
-
-        let function_section = module
-            .function_section()
-            .expect("Module doens't contain function section.");
-        let code_section = module
-            .code_section()
-            .expect("Module doesn't contain code section.");
-
-        let func_sig = &function_section.entries()[func_idx];
-        let func_type = get_function_type(module, func_sig);
-        let func_body = &code_section.bodies()[func_idx];
-
-        (func_type, func_body)
-    }
     fn wat2module<S: AsRef<[u8]>>(source: S) -> parity_wasm::elements::Module {
         let binary = wabt::wat2wasm(source).expect("Failed to parse .wat");
         wasmparser::validate(&binary, None /* Uses default parser config */)
@@ -356,7 +285,7 @@ mod tests {
                   i32.add)
                 (export "add" (func $add)))"#,
         );
-        let (spec_func_type, spec_func_body) = func_by_name(&spec_module, "add");
+        let (spec_func_type, spec_func_body) = parity_wasm_utils::func_by_name(&spec_module, "add");
         let candidate_module: parity_wasm::elements::Module = wat2module(
             r#"(module
                 (type $t0 (func (param i32) (result i32)))
@@ -366,7 +295,8 @@ mod tests {
                   i32.mul)
                 (export "mul" (func $mul)))"#,
         );
-        let (candidate_func_type, candidate_func_body) = func_by_name(&candidate_module, "mul");
+        let (candidate_func_type, candidate_func_body) =
+            parity_wasm_utils::func_by_name(&candidate_module, "mul");
         assert_eq!(spec_func_type, candidate_func_type);
 
         let cfg = z3::Config::new();
@@ -387,7 +317,7 @@ mod tests {
                   i32.add)
                 (export "add" (func $add)))"#,
         );
-        let (spec_func_type, spec_func_body) = func_by_name(&spec_module, "add");
+        let (spec_func_type, spec_func_body) = parity_wasm_utils::func_by_name(&spec_module, "add");
         let candidate_module: parity_wasm::elements::Module = wat2module(
             r#"(module
                 (type $t0 (func (param i32) (result i32)))
@@ -397,7 +327,8 @@ mod tests {
                   i32.mul)
                 (export "mul" (func $mul)))"#,
         );
-        let (candidate_func_type, candidate_func_body) = func_by_name(&candidate_module, "mul");
+        let (candidate_func_type, candidate_func_body) =
+            parity_wasm_utils::func_by_name(&candidate_module, "mul");
         assert_eq!(spec_func_type, candidate_func_type);
 
         let cfg = z3::Config::new();

@@ -1,24 +1,18 @@
+use crate::parity_wasm_utils;
 use parity_wasm::elements::{Internal, Module, Type};
-
-fn import_entries_len(module: &Module) -> usize {
-    match module.import_section() {
-        Some(import_section) => import_section.entries().len(),
-        None => 0,
-    }
-}
 
 fn get_func_name(module: &Module, func_idx: usize) -> Option<&str> {
     // https://webassembly.github.io/spec/core/syntax/modules.html#imports
     // In each index space, the indices of imports go before the first index of
     // any definition contained in the module itself.
-    let import_entries_len = import_entries_len(module);
+    let import_entries_len = parity_wasm_utils::import_entries_len(module) as usize;
     let export_section = module
         .export_section()
         .expect("No export section in the module.");
 
     for entry in export_section.entries() {
         if let Internal::Function(idx) = entry.internal() {
-            if *idx == (func_idx + import_entries_len) as u32 {
+            if *idx as usize == func_idx + import_entries_len {
                 return Some(entry.field());
             }
         }

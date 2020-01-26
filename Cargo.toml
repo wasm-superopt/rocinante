@@ -14,14 +14,6 @@ description = """
 A superoptimizer for WebAssembly
 """
 
-[lib]
-name = "rocinante"
-path = "src/lib.rs"
-
-[[bin]]
-name = "print"
-path = "src/bin/print.rs"
-
 [dependencies]
 clap = "*"
 parity-wasm = "*"
