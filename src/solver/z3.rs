@@ -42,18 +42,18 @@ impl<'ctx> ValueStack<'ctx> {
 #[derive(Debug)]
 pub struct Converter<'ctx> {
     ctx: &'ctx Context,
-    params: Vec<ast::Dynamic<'ctx>>,
-    return_type: Option<ValueType>,
+    z3_params: Vec<ast::Dynamic<'ctx>>,
+    func_type: FunctionType,
 }
 
 impl<'ctx> Converter<'ctx> {
     pub fn new(ctx: &'ctx Context, func_type: &FunctionType) -> Self {
-        let mut params: Vec<ast::Dynamic<'ctx>> = Vec::with_capacity(func_type.params().len());
+        let mut z3_params: Vec<ast::Dynamic<'ctx>> = Vec::with_capacity(func_type.params().len());
 
         for param in func_type.params() {
             match param {
-                ValueType::I32 => params.push(ast::BV::fresh_const(&ctx, "p", 32).into()),
-                ValueType::I64 => params.push(ast::BV::fresh_const(&ctx, "p", 64).into()),
+                ValueType::I32 => z3_params.push(ast::BV::fresh_const(&ctx, "p", 32).into()),
+                ValueType::I64 => z3_params.push(ast::BV::fresh_const(&ctx, "p", 64).into()),
                 _ => {
                     panic!("float not supported.");
                 }
@@ -62,17 +62,17 @@ impl<'ctx> Converter<'ctx> {
 
         Self {
             ctx,
-            params,
-            return_type: func_type.return_type(),
+            z3_params,
+            func_type: func_type.clone(),
         }
     }
 
     pub fn bounds(&self) -> Vec<&ast::Dynamic<'ctx>> {
-        self.params.iter().collect::<Vec<&ast::Dynamic<'ctx>>>()
+        self.z3_params.iter().collect::<Vec<&ast::Dynamic<'ctx>>>()
     }
 
     fn init_locals(&self, local_types: &[Local]) -> Vec<ast::Dynamic<'ctx>> {
-        let mut locals = self.params.clone();
+        let mut locals = self.z3_params.clone();
         locals.reserve(local_types.len());
 
         for local in local_types {
@@ -206,17 +206,19 @@ impl<'ctx> Converter<'ctx> {
             }
         }
 
-        match self.return_type {
+        match self.func_type.return_type() {
             Some(_) => stack.pop(),
             None => panic!("Doens't support void functions."),
         }
     }
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Debug)]
 pub enum VerifyResult {
     Verified,
-    CounterExample,
+    // Use wasmi::RuntimeValue to make it easier to handle these instead of
+    // defining a new one.
+    CounterExample(Vec<wasmi::RuntimeValue>),
 }
 
 pub struct Z3Solver<'ctx> {
@@ -239,22 +241,44 @@ impl<'ctx> Z3Solver<'ctx> {
     pub fn verify(&self, candidate: &FuncBody) -> VerifyResult {
         let candidate_f = self.converter.convert_func(candidate);
         let solver = Solver::new(&self.ctx);
-        let bounds = self.converter.bounds();
 
-        let forall = ast::forall_const(
-            &self.ctx,
-            &bounds,
-            &[],
-            &self.spec_f._eq(&candidate_f).into(),
-        )
-        .as_bool()
-        .unwrap();
-
-        solver.assert(&forall);
+        solver.assert(&self.spec_f._eq(&candidate_f).not());
 
         match solver.check() {
-            z3::SatResult::Sat => VerifyResult::Verified,
-            z3::SatResult::Unsat => VerifyResult::CounterExample,
+            z3::SatResult::Sat => {
+                let model = solver.get_model();
+
+                let mut values = Vec::new();
+
+                for (i, bound) in self.converter.bounds().iter().enumerate() {
+                    let typ = self.converter.func_type.params()[i];
+
+                    match typ {
+                        ValueType::I32 => {
+                            values.push(wasmi::RuntimeValue::I32(
+                                model
+                                    .eval(&bound.as_bv().unwrap())
+                                    .unwrap()
+                                    .as_i64()
+                                    .unwrap() as i32,
+                            ));
+                        }
+                        ValueType::I64 => {
+                            values.push(wasmi::RuntimeValue::I64(
+                                model
+                                    .eval(&bound.as_bv().unwrap())
+                                    .unwrap()
+                                    .as_i64()
+                                    .unwrap(),
+                            ));
+                        }
+                        unexpected => panic!("{} not supported", unexpected),
+                    }
+                }
+
+                VerifyResult::CounterExample(values)
+            }
+            z3::SatResult::Unsat => VerifyResult::Verified,
             z3::SatResult::Unknown => {
                 panic!("Failed to prove or disprove.");
             }
@@ -335,9 +359,31 @@ mod tests {
         let ctx = z3::Context::new(&cfg);
 
         let solver = Z3Solver::new(&ctx, spec_func_type, spec_func_body);
-        assert_eq!(
-            solver.verify(candidate_func_body),
-            VerifyResult::CounterExample
-        );
+        let result = solver.verify(candidate_func_body);
+        assert_matches!(result, VerifyResult::CounterExample(_));
+        if let VerifyResult::CounterExample(cex_vec) = result {
+            assert_eq!(cex_vec.len(), 1);
+
+            let spec_module = wasmi::Module::from_parity_wasm_module(spec_module).unwrap();
+            let spec_instance =
+                wasmi::ModuleInstance::new(&spec_module, &wasmi::ImportsBuilder::default())
+                    .unwrap()
+                    .assert_no_start();
+            let spec_output = spec_instance
+                .invoke_export("add", &cex_vec, &mut wasmi::NopExternals)
+                .unwrap();
+
+            let candidate_module =
+                wasmi::Module::from_parity_wasm_module(candidate_module).unwrap();
+            let candidate_instance =
+                wasmi::ModuleInstance::new(&candidate_module, &wasmi::ImportsBuilder::default())
+                    .unwrap()
+                    .assert_no_start();
+            let candidate_output = candidate_instance
+                .invoke_export("mul", &cex_vec, &mut wasmi::NopExternals)
+                .unwrap();
+            assert_ne!(spec_output, candidate_output);
+            println!("{:?} {:?} {:?}", cex_vec, spec_output, candidate_output);
+        }
     }
 }
