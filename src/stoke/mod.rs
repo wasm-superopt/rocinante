@@ -1,4 +1,4 @@
-use crate::{exec, parity_wasm_utils, solver, wasmi_utils};
+use crate::{debug, exec, parity_wasm_utils, solver, wasmi_utils};
 use parity_wasm::elements::{
     FuncBody as EFuncBody, FunctionType as EFunctionType, Instruction as EInstruction,
     Instructions as EInstructions, Internal as EInternal, Module as EModule,
@@ -48,21 +48,22 @@ impl Superoptimizer {
                 let cfg = z3::Config::new();
                 let ctx = z3::Context::new(&cfg);
                 let z3solver = solver::Z3Solver::new(&ctx, func_type, func_body);
-                let generator = Generator::new(func_type);
+                let mut generator = Generator::new(func_type);
 
                 loop {
                     if generator.eval_test_cases(&test_cases) > 0 {
-                        generator.do_transform();
+                        generator.do_transform(rng);
                         continue;
                     }
                     match z3solver.verify(generator.get_candidate_func()) {
                         solver::VerifyResult::Verified => {
                             // collect the function from generator
+                            debug::print_functions(generator.module());
                             break;
                         }
                         solver::VerifyResult::CounterExample => {
                             // Add input, output pair to the test cases.
-                            generator.do_transform()
+                            generator.do_transform(rng)
                         }
                     }
                 }
@@ -82,13 +83,21 @@ impl Generator {
         }
     }
 
-    pub fn do_transform(&self) {
-        let transform: Transform = rand::random();
+    pub fn do_transform<R: Rng>(&mut self, rng: &mut R) {
+        let transform: Transform = rng.gen::<Transform>();
+        let instrs = self.get_candidate_func().code().elements();
 
         match transform {
             Transform::Opcode => {
                 // Choose an instruction at random, and replace with a random,
                 // equivalent one.
+
+                let idx: usize = rng.gen_range(0, instrs.len());
+
+                let new_instr = get_equiv(rng, &instrs[idx]);
+                let mut new_instrs = Vec::with_capacity(instrs.len());
+                new_instrs.clone_from_slice(instrs);
+                new_instrs[idx] = new_instr;
             }
             Transform::Operand => {
                 // Select an instruction at random, and its operand is replaced by a
