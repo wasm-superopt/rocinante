@@ -1,4 +1,7 @@
 extern crate clap;
+#[cfg(test)]
+#[macro_use]
+extern crate matches;
 extern crate parity_wasm;
 extern crate rand;
 extern crate wabt;
