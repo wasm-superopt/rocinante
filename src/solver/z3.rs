@@ -289,7 +289,7 @@ impl<'ctx> Z3Solver<'ctx> {
 #[cfg(test)]
 mod tests {
     use super::{VerifyResult, Z3Solver};
-    use crate::parity_wasm_utils;
+    use crate::{parity_wasm_utils, wasmi_utils};
 
     fn wat2module<S: AsRef<[u8]>>(source: S) -> parity_wasm::elements::Module {
         let binary = wabt::wat2wasm(source).expect("Failed to parse .wat");
@@ -364,21 +364,12 @@ mod tests {
         if let VerifyResult::CounterExample(cex_vec) = result {
             assert_eq!(cex_vec.len(), 1);
 
-            let spec_module = wasmi::Module::from_parity_wasm_module(spec_module).unwrap();
-            let spec_instance =
-                wasmi::ModuleInstance::new(&spec_module, &wasmi::ImportsBuilder::default())
-                    .unwrap()
-                    .assert_no_start();
+            let spec_instance = wasmi_utils::instantiate(spec_module);
             let spec_output = spec_instance
                 .invoke_export("add", &cex_vec, &mut wasmi::NopExternals)
                 .unwrap();
 
-            let candidate_module =
-                wasmi::Module::from_parity_wasm_module(candidate_module).unwrap();
-            let candidate_instance =
-                wasmi::ModuleInstance::new(&candidate_module, &wasmi::ImportsBuilder::default())
-                    .unwrap()
-                    .assert_no_start();
+            let candidate_instance = wasmi_utils::instantiate(candidate_module);
             let candidate_output = candidate_instance
                 .invoke_export("mul", &cex_vec, &mut wasmi::NopExternals)
                 .unwrap();

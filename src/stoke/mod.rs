@@ -1,8 +1,7 @@
 use crate::{debug, exec, parity_wasm_utils, solver, wasmi_utils};
 use parity_wasm::elements::{
-    FuncBody as EFuncBody, FunctionType as EFunctionType, Instruction as EInstruction,
-    Instructions as EInstructions, Internal as EInternal, Module as EModule,
-    ValueType as EValueType,
+    FuncBody as EFuncBody, FunctionType as EFunctionType, Instructions as EInstructions,
+    Internal as EInternal, Module as EModule,
 };
 use rand::Rng;
 
@@ -78,8 +77,9 @@ pub struct Generator {
 
 impl Generator {
     pub fn new(func_type: &EFunctionType) -> Self {
+        let func_body = EFuncBody::new(vec![], EInstructions::empty());
         Self {
-            module: gen_random_func(func_type),
+            module: parity_wasm_utils::build_module("candidate", func_type, func_body),
         }
     }
 
@@ -149,39 +149,4 @@ impl Generator {
 
         dist
     }
-}
-
-fn gen_random_func(func_type: &EFunctionType) -> EModule {
-    let param_types = func_type.params();
-    let return_type: Option<EValueType> = func_type.return_type();
-
-    let instr: EInstruction = match return_type {
-        None => EInstruction::End,
-        Some(val_type) => match val_type {
-            EValueType::I32 => EInstruction::I32Const(0),
-            EValueType::I64 => EInstruction::I64Const(0),
-            EValueType::F32 => EInstruction::F32Const(0),
-            EValueType::F64 => EInstruction::F64Const(0),
-        },
-    };
-
-    #[rustfmt::skip]
-    let module = parity_wasm::builder::module()
-        .export()
-            .field("candidate")
-            .internal()
-            .func(0)
-            .build()
-        .function()
-            .signature()
-                .with_params(param_types.to_vec())
-                .with_return_type(return_type)
-                .build()
-            .body()
-                .with_instructions(EInstructions::new(vec![instr]))
-                .build()
-            .build()
-        .build();
-
-    module
 }
