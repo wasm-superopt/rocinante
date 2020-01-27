@@ -89,6 +89,35 @@ pub fn invoke_with_inputs(func_ref: &FuncRef, inputs: &[Input]) -> Vec<Output> {
     outputs
 }
 
+pub fn eval_test_cases(
+    module: parity_wasm::elements::Module,
+    test_cases: &[(Input, Output)],
+) -> u32 {
+    // The module is validated this step.
+    let module_or_err = wasmi::Module::from_parity_wasm_module(module);
+    if module_or_err.is_err() {
+        // Compute the hamming distance
+        return 10;
+    }
+    let module = module_or_err.unwrap();
+    let instance_or_err = wasmi::ModuleInstance::new(&module, &wasmi::ImportsBuilder::default());
+    if instance_or_err.is_err() {
+        // Compute the hamming distance
+        return 10;
+    }
+    let instance = instance_or_err.unwrap().assert_no_start();
+    let candidate_func = wasmi_utils::func_by_name(&instance, "candidate").unwrap();
+
+    let mut dist = 0;
+    for (input, expected_output) in test_cases {
+        let actual_output =
+            wasmi::FuncInstance::invoke(&candidate_func, input, &mut wasmi::NopExternals);
+        dist += hamming_distance(expected_output, &actual_output);
+    }
+
+    dist
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
