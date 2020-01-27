@@ -112,14 +112,12 @@ pub fn eval_test_cases(
     // The module is validated this step.
     let module_or_err = wasmi::Module::from_parity_wasm_module(module);
     if module_or_err.is_err() {
-        // Compute the hamming distance
-        return 10;
+        return 64 * test_cases.len() as u32;
     }
     let module = module_or_err.unwrap();
     let instance_or_err = wasmi::ModuleInstance::new(&module, &wasmi::ImportsBuilder::default());
     if instance_or_err.is_err() {
-        // Compute the hamming distance
-        return 10;
+        return 64 * test_cases.len() as u32;
     }
     let instance = instance_or_err.unwrap().assert_no_start();
     let candidate_func = wasmi_utils::func_by_name(&instance, "candidate").unwrap();
