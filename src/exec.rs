@@ -13,7 +13,7 @@ pub type Output = Result<Option<RuntimeValue>, Trap>;
 pub fn hamming_distance(output1: &Output, output2: &Output) -> u32 {
     match (output1, output2) {
         (Ok(val_opt1), Ok(val_opt2)) => match (val_opt1, val_opt2) {
-            (None, None) => 0,
+            (None, None) => panic!("Doens't support void functions."),
             (Some(val1), Some(val2)) => match (val1, val2) {
                 (RuntimeValue::I32(x), RuntimeValue::I32(y)) => (x ^ y).count_ones(),
                 (RuntimeValue::I64(x), RuntimeValue::I64(y)) => (x ^ y).count_ones(),
@@ -27,8 +27,24 @@ pub fn hamming_distance(output1: &Output, output2: &Output) -> u32 {
             },
             _ => panic!("Spec and candidate function return type don't match."),
         },
-        (Ok(_), Err(_)) => 32,
-        (Err(_), Ok(_)) => 32,
+        (Ok(val_opt), Err(_)) => match val_opt {
+            None => panic!("doesn't support void functions."),
+            Some(val) => match val {
+                RuntimeValue::I32(_) => 32,
+                RuntimeValue::I64(_) => 64,
+                RuntimeValue::F32(_) => 32,
+                RuntimeValue::F64(_) => 64,
+            },
+        },
+        (Err(_), Ok(val_opt)) => match val_opt {
+            None => panic!("doesn't support void functions."),
+            Some(val) => match val {
+                RuntimeValue::I32(_) => 32,
+                RuntimeValue::I64(_) => 64,
+                RuntimeValue::F32(_) => 32,
+                RuntimeValue::F64(_) => 64,
+            },
+        },
         (Err(err1), Err(err2)) => {
             if err1.to_string() == err2.to_string() {
                 0
@@ -122,7 +138,7 @@ pub fn eval_test_cases(
 mod tests {
     use super::*;
     use crate::wasmi_utils;
-    use wasmi::{ImportsBuilder, ModuleInstance};
+    use wasmi::{ImportsBuilder, ModuleInstance, TrapKind};
 
     #[test]
     fn test_invoke() {
@@ -174,5 +190,54 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn hamming_distance_test() {
+        assert_eq!(
+            1,
+            hamming_distance(
+                &Output::Ok(Some(RuntimeValue::I32(1))),
+                &Output::Ok(Some(RuntimeValue::I32(0)))
+            )
+        );
+        assert_eq!(
+            3,
+            hamming_distance(
+                &Output::Ok(Some(RuntimeValue::I64(5))),
+                &Output::Ok(Some(RuntimeValue::I64(2)))
+            )
+        );
+        assert_eq!(
+            4,
+            hamming_distance(
+                &Output::Ok(Some(RuntimeValue::F32(
+                    nan_preserving_float::F32::from_bits(0xF0)
+                ))),
+                &Output::Ok(Some(RuntimeValue::F32(
+                    nan_preserving_float::F32::from_bits(0xAA)
+                )))
+            )
+        );
+        assert_eq!(
+            32,
+            hamming_distance(
+                &Output::Ok(Some(RuntimeValue::I32(3))),
+                &Output::Err(Trap::new(TrapKind::DivisionByZero))
+            )
+        );
+        assert_eq!(
+            64,
+            hamming_distance(
+                &Output::Err(Trap::new(TrapKind::DivisionByZero)),
+                &Output::Ok(Some(RuntimeValue::I64(3))),
+            )
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Doens't support void functions.")]
+    fn hamming_distance_void_func_test() {
+        hamming_distance(&Output::Ok(None), &Output::Ok(None));
     }
 }
