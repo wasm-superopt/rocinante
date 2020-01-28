@@ -1,5 +1,7 @@
 use crate::{debug, exec, parity_wasm_utils, solver};
-use parity_wasm::elements::{FuncBody, FunctionType, Instruction, Instructions, Internal, Module};
+use parity_wasm::elements::{
+    FuncBody, FunctionType, Instruction, Instructions, Internal, Local, Module, ValueType,
+};
 use rand::distributions::{Distribution, Standard};
 use rand::seq::SliceRandom;
 use rand::Rng;
@@ -111,7 +113,47 @@ pub enum WhitelistedInstruction {
     Nop,
 }
 
-impl WhitelistedInstruction {}
+impl WhitelistedInstruction {
+    pub fn sample<R: Rng + ?Sized>(
+        rng: &mut R,
+        local_types: &[ValueType],
+    ) -> WhitelistedInstruction {
+        match rng.gen_range(0, 20) {
+            0 => WhitelistedInstruction::I32Add,
+            1 => WhitelistedInstruction::I32Sub,
+            2 => WhitelistedInstruction::I32Mul,
+            3 => WhitelistedInstruction::I32DivS,
+            4 => WhitelistedInstruction::I32DivU,
+            5 => WhitelistedInstruction::I32RemS,
+            6 => WhitelistedInstruction::I32RemU,
+            7 => WhitelistedInstruction::I32And,
+            8 => WhitelistedInstruction::I32Or,
+            9 => WhitelistedInstruction::I32Xor,
+            10 => WhitelistedInstruction::I32Shl,
+            11 => WhitelistedInstruction::I32ShrS,
+            12 => WhitelistedInstruction::I32ShrU,
+            13 => WhitelistedInstruction::I32Rotl,
+            14 => WhitelistedInstruction::I32Rotr,
+            15 => {
+                // TODO: Support increasing the number of locals.
+                let idx = rng.gen_range(0, local_types.len()) as u32;
+                WhitelistedInstruction::GetLocal(idx)
+            }
+            16 => {
+                // TODO: Support increasing the number of locals.
+                let idx = rng.gen_range(0, local_types.len()) as u32;
+                WhitelistedInstruction::SetLocal(idx)
+            }
+            17 => {
+                // TODO: Support increasing the number of locals.
+                let idx = rng.gen_range(0, local_types.len()) as u32;
+                WhitelistedInstruction::TeeLocal(idx)
+            }
+            18 => WhitelistedInstruction::End,
+            _ => WhitelistedInstruction::Nop,
+        }
+    }
+}
 
 impl std::fmt::Display for WhitelistedInstruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -195,33 +237,6 @@ impl Into<Instruction> for WhitelistedInstruction {
     }
 }
 
-impl Distribution<WhitelistedInstruction> for Standard {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> WhitelistedInstruction {
-        match rng.gen_range(0, 20) {
-            0 => WhitelistedInstruction::I32Add,
-            1 => WhitelistedInstruction::I32Sub,
-            2 => WhitelistedInstruction::I32Mul,
-            3 => WhitelistedInstruction::I32DivS,
-            4 => WhitelistedInstruction::I32DivU,
-            5 => WhitelistedInstruction::I32RemS,
-            6 => WhitelistedInstruction::I32RemU,
-            7 => WhitelistedInstruction::I32And,
-            8 => WhitelistedInstruction::I32Or,
-            9 => WhitelistedInstruction::I32Xor,
-            10 => WhitelistedInstruction::I32Shl,
-            11 => WhitelistedInstruction::I32ShrS,
-            12 => WhitelistedInstruction::I32ShrU,
-            13 => WhitelistedInstruction::I32Rotl,
-            14 => WhitelistedInstruction::I32Rotr,
-            15 => WhitelistedInstruction::GetLocal(0),
-            16 => WhitelistedInstruction::SetLocal(0),
-            17 => WhitelistedInstruction::TeeLocal(0),
-            18 => WhitelistedInstruction::End,
-            _ => WhitelistedInstruction::Nop,
-        }
-    }
-}
-
 pub struct TransformPools {}
 
 const I32BINOP: [Instruction; 15] = [
@@ -288,24 +303,25 @@ impl Generator {
         }
     }
 
-    // fn get_local_types(&self, param_types: &[ValueType], locals: &[Local]) -> Vec<ValueType> {
-    //     let mut types = param_types.to_vec();
+    fn get_local_types(&self, param_types: &[ValueType], locals: &[Local]) -> Vec<ValueType> {
+        let mut types = param_types.to_vec();
 
-    //     for local in locals {
-    //         let count = local.count() as usize;
-    //         types.reserve(count);
-    //         let local_type = local.value_type();
-    //         for _ in 0..count {
-    //             types.push(local_type);
-    //         }
-    //     }
+        for local in locals {
+            let count = local.count() as usize;
+            types.reserve(count);
+            let local_type = local.value_type();
+            for _ in 0..count {
+                types.push(local_type);
+            }
+        }
 
-    //     types
-    // }
+        types
+    }
 
     pub fn do_transform<R: Rng>(&mut self, rng: &mut R) {
         let transform: Transform = rng.gen::<Transform>();
         let instrs = self.func_body.code().elements();
+        let local_types = self.get_local_types(self.func_type.params(), self.func_body.locals());
 
         match transform {
             Transform::Opcode => {
@@ -357,9 +373,11 @@ impl Generator {
                 }
             }
             Transform::Instruction => {
-                let _idx = rng.gen_range(0, instrs.len());
-                // Select an instruction, and replace with a random instruction,
-                // with random operands.
+                let idx = rng.gen_range(0, instrs.len());
+                let mut new_instrs = Vec::with_capacity(instrs.len());
+                new_instrs.clone_from_slice(instrs);
+                let new_instr = WhitelistedInstruction::sample(rng, &local_types);
+                new_instrs[idx] = new_instr.into();
             }
         }
     }
