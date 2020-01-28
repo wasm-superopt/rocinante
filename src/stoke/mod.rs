@@ -1,6 +1,6 @@
 use crate::{debug, exec, parity_wasm_utils, solver};
 use parity_wasm::elements::{
-    FuncBody, FunctionType, Instruction, Instructions, Internal, Local, Module, ValueType,
+    FuncBody, FunctionType, Instruction, Instructions, Internal, Module, ValueType,
 };
 use rand::distributions::{Distribution, Standard};
 use rand::seq::SliceRandom;
@@ -116,7 +116,9 @@ pub enum WhitelistedInstruction {
 impl WhitelistedInstruction {
     pub fn sample<R: Rng + ?Sized>(
         rng: &mut R,
-        local_types: &[ValueType],
+        param_types: &[ValueType],
+        // TODO: Support increasing the number of locals.
+        _local_types: &mut Vec<ValueType>,
     ) -> WhitelistedInstruction {
         match rng.gen_range(0, 20) {
             0 => WhitelistedInstruction::I32Add,
@@ -135,18 +137,15 @@ impl WhitelistedInstruction {
             13 => WhitelistedInstruction::I32Rotl,
             14 => WhitelistedInstruction::I32Rotr,
             15 => {
-                // TODO: Support increasing the number of locals.
-                let idx = rng.gen_range(0, local_types.len()) as u32;
+                let idx = rng.gen_range(0, param_types.len()) as u32;
                 WhitelistedInstruction::GetLocal(idx)
             }
             16 => {
-                // TODO: Support increasing the number of locals.
-                let idx = rng.gen_range(0, local_types.len()) as u32;
+                let idx = rng.gen_range(0, param_types.len()) as u32;
                 WhitelistedInstruction::SetLocal(idx)
             }
             17 => {
-                // TODO: Support increasing the number of locals.
-                let idx = rng.gen_range(0, local_types.len()) as u32;
+                let idx = rng.gen_range(0, param_types.len()) as u32;
                 WhitelistedInstruction::TeeLocal(idx)
             }
             18 => WhitelistedInstruction::End,
@@ -237,8 +236,6 @@ impl Into<Instruction> for WhitelistedInstruction {
     }
 }
 
-pub struct TransformPools {}
-
 const I32BINOP: [Instruction; 15] = [
     Instruction::I32Add,
     Instruction::I32Sub,
@@ -265,10 +262,22 @@ const VAROP: [fn(n: u32) -> Instruction; 3] = [
     // Instruction::SetGlobal,
 ];
 
-impl TransformPools {
-    fn new() -> Self {
-        Self {}
+pub struct Generator {
+    func_type: FunctionType,
+    func_body: FuncBody,
+    local_types: Vec<ValueType>,
+}
+
+impl Generator {
+    pub fn new(func_type: &FunctionType) -> Self {
+        let func_body = FuncBody::new(vec![], Instructions::empty());
+        Self {
+            func_type: func_type.clone(),
+            func_body,
+            local_types: Vec::new(),
+        }
     }
+
     fn get_equiv<R: Rng + ?Sized>(&self, rng: &mut R, instr: &Instruction) -> Instruction {
         // Make sure this instruction is whitelisted.
         let _: WhitelistedInstruction = instr.clone().into();
@@ -285,43 +294,41 @@ impl TransformPools {
             }
         }
     }
-}
 
-pub struct Generator {
-    pools: TransformPools,
-    func_type: FunctionType,
-    func_body: FuncBody,
-}
+    fn get_equiv_idx<R: Rng + ?Sized>(&self, rng: &mut R, i: u32) -> u32 {
+        let i = i as usize;
+        let typ: &ValueType = if i < self.func_type.params().len() {
+            &self.func_type.params()[i]
+        } else if i < self.func_type.params().len() + self.local_types.len() {
+            &self.local_types[i]
+        } else {
+            panic!("local index out of bounds: {}", i);
+        };
 
-impl Generator {
-    pub fn new(func_type: &FunctionType) -> Self {
-        let func_body = FuncBody::new(vec![], Instructions::empty());
-        Self {
-            pools: TransformPools::new(),
-            func_type: func_type.clone(),
-            func_body,
-        }
-    }
-
-    fn get_local_types(&self, param_types: &[ValueType], locals: &[Local]) -> Vec<ValueType> {
-        let mut types = param_types.to_vec();
-
-        for local in locals {
-            let count = local.count() as usize;
-            types.reserve(count);
-            let local_type = local.value_type();
-            for _ in 0..count {
-                types.push(local_type);
+        let mut equiv_indices = Vec::new();
+        for (i, param_type) in self.func_type.params().iter().enumerate() {
+            if param_type == typ {
+                equiv_indices.push(i);
             }
         }
 
-        types
+        for (i, local_type) in self.local_types.iter().enumerate() {
+            if local_type == typ {
+                equiv_indices.push(i + self.func_type.params().len());
+            }
+        }
+
+        assert!(!equiv_indices.is_empty());
+
+        *equiv_indices.choose(rng).unwrap() as u32
     }
 
     pub fn do_transform<R: Rng>(&mut self, rng: &mut R) {
         let transform: Transform = rng.gen::<Transform>();
         let instrs = self.func_body.code().elements();
-        let local_types = self.get_local_types(self.func_type.params(), self.func_body.locals());
+
+        let mut new_instrs = Vec::with_capacity(instrs.len());
+        new_instrs.clone_from_slice(instrs);
 
         match transform {
             Transform::Opcode => {
@@ -329,9 +336,7 @@ impl Generator {
                 // equivalent one.
                 let idx: usize = rng.gen_range(0, instrs.len());
                 let chosen_instr = &instrs[idx];
-                let new_instr = self.pools.get_equiv(rng, chosen_instr);
-                let mut new_instrs = Vec::with_capacity(instrs.len());
-                new_instrs.clone_from_slice(instrs);
+                let new_instr = self.get_equiv(rng, chosen_instr);
                 new_instrs[idx] = new_instr;
             }
             Transform::Operand => {
@@ -340,27 +345,24 @@ impl Generator {
                 let idx: usize = rng.gen_range(0, instrs.len());
                 let chosen_instr = &instrs[idx];
 
-                match chosen_instr {
-                    Instruction::GetLocal(_)
-                    | Instruction::SetLocal(_)
-                    | Instruction::TeeLocal(_) => {
-                        // Get index of local variable that has the same type,
-                        // or index of a new local variable.
-                    }
-                    _ if I32BINOP.contains(chosen_instr) => {}
-                    Instruction::End => {}
+                let new_instr = match chosen_instr {
+                    Instruction::GetLocal(i) => Instruction::GetLocal(self.get_equiv_idx(rng, *i)),
+                    Instruction::SetLocal(i) => Instruction::SetLocal(self.get_equiv_idx(rng, *i)),
+                    Instruction::TeeLocal(i) => Instruction::SetLocal(self.get_equiv_idx(rng, *i)),
+                    _ if I32BINOP.contains(chosen_instr) => chosen_instr.clone(),
+                    Instruction::End => Instruction::End,
+                    Instruction::Nop => Instruction::Nop,
                     _ => {
                         panic!("Not implemented");
                     }
-                }
+                };
+                new_instrs[idx] = new_instr;
             }
             Transform::Swap => {
                 // Select two instructions from the set of original instructions
                 // union with Nop, and swap
                 let idx1 = rng.gen_range(0, instrs.len() + 1);
                 let idx2 = rng.gen_range(0, instrs.len() + 1);
-                let mut new_instrs = Vec::with_capacity(instrs.len());
-                new_instrs.clone_from_slice(instrs);
                 if idx1 < instrs.len() && idx2 < instrs.len() {
                     new_instrs[idx1] = instrs[idx2].clone();
                     new_instrs[idx2] = instrs[idx1].clone();
@@ -374,12 +376,16 @@ impl Generator {
             }
             Transform::Instruction => {
                 let idx = rng.gen_range(0, instrs.len());
-                let mut new_instrs = Vec::with_capacity(instrs.len());
-                new_instrs.clone_from_slice(instrs);
-                let new_instr = WhitelistedInstruction::sample(rng, &local_types);
+                let new_instr = WhitelistedInstruction::sample(
+                    rng,
+                    self.func_type.params(),
+                    &mut self.local_types,
+                );
                 new_instrs[idx] = new_instr.into();
             }
         }
+
+        *self.func_body.code_mut() = Instructions::new(new_instrs);
     }
 
     pub fn module(&self) -> Module {
