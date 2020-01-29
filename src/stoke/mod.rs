@@ -280,7 +280,7 @@ impl Generator {
     pub fn new(func_type: &FunctionType) -> Self {
         let instrs = vec![
             Instruction::GetLocal(0),
-            Instruction::I32Const(2),
+            Instruction::GetLocal(0),
             Instruction::I32Mul,
             Instruction::End,
         ];
