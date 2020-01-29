@@ -110,7 +110,13 @@ pub fn eval_test_cases(
     test_cases: &[(Input, Output)],
 ) -> u32 {
     // The module is validated this step.
-    let module_or_err = wasmi::Module::from_parity_wasm_module(module);
+    let result_or_err = std::panic::catch_unwind(|| wasmi::Module::from_parity_wasm_module(module));
+    if result_or_err.is_err() {
+        return 64 * test_cases.len() as u32;
+    }
+
+    let module_or_err = result_or_err.unwrap();
+
     if module_or_err.is_err() {
         return 64 * test_cases.len() as u32;
     }
