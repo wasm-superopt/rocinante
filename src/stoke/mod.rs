@@ -106,6 +106,7 @@ pub enum WhitelistedInstruction {
     I32ShrU,
     I32Rotl,
     I32Rotr,
+    I32Const(i32),
     GetLocal(u32),
     SetLocal(u32),
     TeeLocal(u32),
@@ -120,7 +121,7 @@ impl WhitelistedInstruction {
         // TODO: Support increasing the number of locals.
         _local_types: &mut Vec<ValueType>,
     ) -> WhitelistedInstruction {
-        match rng.gen_range(0, 20) {
+        match rng.gen_range(0, 21) {
             0 => WhitelistedInstruction::I32Add,
             1 => WhitelistedInstruction::I32Sub,
             2 => WhitelistedInstruction::I32Mul,
@@ -137,18 +138,22 @@ impl WhitelistedInstruction {
             13 => WhitelistedInstruction::I32Rotl,
             14 => WhitelistedInstruction::I32Rotr,
             15 => {
-                let idx = rng.gen_range(0, param_types.len()) as u32;
-                WhitelistedInstruction::GetLocal(idx)
+                let operands = vec![-2, -1, 0, 1, 2];
+                WhitelistedInstruction::I32Const(*operands.choose(rng).unwrap())
             }
             16 => {
                 let idx = rng.gen_range(0, param_types.len()) as u32;
-                WhitelistedInstruction::SetLocal(idx)
+                WhitelistedInstruction::GetLocal(idx)
             }
             17 => {
                 let idx = rng.gen_range(0, param_types.len()) as u32;
+                WhitelistedInstruction::SetLocal(idx)
+            }
+            18 => {
+                let idx = rng.gen_range(0, param_types.len()) as u32;
                 WhitelistedInstruction::TeeLocal(idx)
             }
-            18 => WhitelistedInstruction::End,
+            19 => WhitelistedInstruction::End,
             _ => WhitelistedInstruction::Nop,
         }
     }
@@ -172,6 +177,7 @@ impl std::fmt::Display for WhitelistedInstruction {
             WhitelistedInstruction::I32ShrU => write!(f, "i32.shru"),
             WhitelistedInstruction::I32Rotl => write!(f, "i32.rotl"),
             WhitelistedInstruction::I32Rotr => write!(f, "i32.rotr"),
+            WhitelistedInstruction::I32Const(i) => write!(f, "i32.const {}", i),
             WhitelistedInstruction::GetLocal(i) => write!(f, "get_local {}", i),
             WhitelistedInstruction::SetLocal(i) => write!(f, "set_local {}", i),
             WhitelistedInstruction::TeeLocal(i) => write!(f, "tee_local {}", i),
@@ -199,6 +205,7 @@ impl From<Instruction> for WhitelistedInstruction {
             Instruction::I32ShrU => WhitelistedInstruction::I32ShrU,
             Instruction::I32Rotl => WhitelistedInstruction::I32Rotl,
             Instruction::I32Rotr => WhitelistedInstruction::I32Rotr,
+            Instruction::I32Const(i) => WhitelistedInstruction::I32Const(i),
             Instruction::GetLocal(i) => WhitelistedInstruction::GetLocal(i),
             Instruction::SetLocal(i) => WhitelistedInstruction::SetLocal(i),
             Instruction::TeeLocal(i) => WhitelistedInstruction::TeeLocal(i),
@@ -227,6 +234,7 @@ impl Into<Instruction> for WhitelistedInstruction {
             WhitelistedInstruction::I32ShrU => Instruction::I32ShrU,
             WhitelistedInstruction::I32Rotl => Instruction::I32Rotl,
             WhitelistedInstruction::I32Rotr => Instruction::I32Rotr,
+            WhitelistedInstruction::I32Const(i) => Instruction::I32Const(i),
             WhitelistedInstruction::GetLocal(i) => Instruction::GetLocal(i),
             WhitelistedInstruction::SetLocal(i) => Instruction::SetLocal(i),
             WhitelistedInstruction::TeeLocal(i) => Instruction::TeeLocal(i),
@@ -270,7 +278,13 @@ pub struct Generator {
 
 impl Generator {
     pub fn new(func_type: &FunctionType) -> Self {
-        let func_body = FuncBody::new(vec![], Instructions::empty());
+        let instrs = vec![
+            Instruction::GetLocal(0),
+            Instruction::I32Const(2),
+            Instruction::I32Mul,
+            Instruction::End,
+        ];
+        let func_body = FuncBody::new(vec![], Instructions::new(instrs));
         Self {
             func_type: func_type.clone(),
             func_body,
@@ -287,6 +301,7 @@ impl Generator {
             Instruction::GetLocal(i) | Instruction::SetLocal(i) | Instruction::TeeLocal(i) => {
                 (*VAROP.choose(rng).unwrap())(*i)
             }
+            Instruction::I32Const(i) => Instruction::I32Const(*i),
             Instruction::End => Instruction::End,
             Instruction::Nop => Instruction::Nop,
             _ => {
@@ -351,6 +366,10 @@ impl Generator {
                     _ if I32BINOP.contains(chosen_instr) => chosen_instr.clone(),
                     Instruction::End => Instruction::End,
                     Instruction::Nop => Instruction::Nop,
+                    Instruction::I32Const(_) => {
+                        let operands = vec![-2, -1, 0, 1, 2];
+                        Instruction::I32Const(*operands.choose(rng).unwrap())
+                    }
                     _ => {
                         panic!("Not implemented");
                     }
