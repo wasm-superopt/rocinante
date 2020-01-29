@@ -49,6 +49,7 @@ impl Superoptimizer {
 
                 loop {
                     let module = generator.module();
+                    debug::print_functions(&module);
                     if exec::eval_test_cases(module.clone(), &test_cases) > 0 {
                         generator.do_transform(rng);
                         continue;
@@ -56,7 +57,6 @@ impl Superoptimizer {
                     match z3solver.verify(generator.get_candidate_func()) {
                         solver::VerifyResult::Verified => {
                             // collect the function from generator
-                            debug::print_functions(&module);
                             break;
                         }
                         solver::VerifyResult::CounterExample(_) => {
@@ -327,8 +327,7 @@ impl Generator {
         let transform: Transform = rng.gen::<Transform>();
         let instrs = self.func_body.code().elements();
 
-        let mut new_instrs = Vec::with_capacity(instrs.len());
-        new_instrs.clone_from_slice(instrs);
+        let mut new_instrs = instrs.to_vec();
 
         match transform {
             Transform::Opcode => {
@@ -385,7 +384,10 @@ impl Generator {
             }
         }
 
-        *self.func_body.code_mut() = Instructions::new(new_instrs);
+        self.func_body
+            .code_mut()
+            .elements_mut()
+            .clone_from(&new_instrs);
     }
 
     pub fn module(&self) -> Module {

@@ -72,7 +72,9 @@ fn main() {
     if let Some(_matches) = matches.subcommand_matches("print") {
         debug::print_functions(&module);
     } else {
+        debug::print_functions(&module);
         let optimizer = stoke::Superoptimizer::new(module);
-        optimizer.run();
+        let mut rng = rand::thread_rng();
+        optimizer.synthesize(&mut rng);
     }
 }
