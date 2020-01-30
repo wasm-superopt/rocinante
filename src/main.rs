@@ -72,6 +72,7 @@ fn main() {
     if let Some(_matches) = matches.subcommand_matches("print") {
         debug::print_functions(&module);
     } else {
+        // TODO(taegyunkim): Propagate the template function.
         debug::print_functions(&module);
         let optimizer = stoke::Superoptimizer::new(module);
         let mut rng = rand::thread_rng();

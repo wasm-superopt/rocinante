@@ -10,6 +10,9 @@ pub type Input = Vec<RuntimeValue>;
 
 pub type Output = Result<Option<RuntimeValue>, Trap>;
 
+/// Computes hamming distance between the outputs. We intentinoally use u32 here
+/// as the return type as it doesn't make sense to have negative values for the
+/// hamming distance.
 pub fn hamming_distance(output1: &Output, output2: &Output) -> u32 {
     match (output1, output2) {
         (Ok(val_opt1), Ok(val_opt2)) => match (val_opt1, val_opt2) {
@@ -45,6 +48,7 @@ pub fn hamming_distance(output1: &Output, output2: &Output) -> u32 {
                 RuntimeValue::F64(_) => 64,
             },
         },
+        // TODO(taegyunkim): Use sensible values for errors.
         (Err(err1), Err(err2)) => {
             if err1.to_string() == err2.to_string() {
                 0
@@ -105,6 +109,9 @@ pub fn invoke_with_inputs(func_ref: &FuncRef, inputs: &[Input]) -> Vec<Output> {
     outputs
 }
 
+// NOTE(taegyunkim): The return type of this function is unsigned instead of
+// signed because it represents the sum of hamming distances. When it overflows,
+// rust will panic.
 pub fn eval_test_cases(
     module: parity_wasm::elements::Module,
     test_cases: &[(Input, Output)],

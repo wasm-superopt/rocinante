@@ -38,7 +38,6 @@ impl Superoptimizer {
                 let func_name = export_entry.field();
 
                 let test_cases = exec::generate_test_cases(rng, &instance, func_name);
-                // let _generator = Generator::new(&func_type);
                 let (func_type, func_body) =
                     parity_wasm_utils::func_by_name(&self.module, func_name);
 
@@ -48,6 +47,7 @@ impl Superoptimizer {
                 let mut generator = Generator::new(func_type);
 
                 loop {
+                    // TODO(taegyunkim): Implement undo of a transformation.
                     let module = generator.module();
                     debug::print_functions(&module);
                     if exec::eval_test_cases(module.clone(), &test_cases) > 0 {
@@ -56,11 +56,12 @@ impl Superoptimizer {
                     }
                     match z3solver.verify(generator.get_candidate_func()) {
                         solver::VerifyResult::Verified => {
+                            println!("Verified.");
                             // collect the function from generator
                             break;
                         }
                         solver::VerifyResult::CounterExample(_) => {
-                            // Add input, output pair to the test cases.
+                            // TODO(taegyunkim): Add input, output pair to the test cases.
                             generator.do_transform(rng)
                         }
                     }
@@ -89,6 +90,8 @@ impl Distribution<Transform> for Standard {
     }
 }
 
+// TODO(taegyunkim): Figure out a way to check all cases are covered whenever
+// this is used.
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum WhitelistedInstruction {
     I32Add,
