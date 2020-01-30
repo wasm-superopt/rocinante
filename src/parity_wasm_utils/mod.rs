@@ -33,7 +33,6 @@ pub fn get_function_type<'module>(
     func_type
 }
 
-#[allow(dead_code)]
 pub fn func_by_name<'module>(
     module: &'module Module,
     func_name: &str,
@@ -59,9 +58,66 @@ pub fn func_by_name<'module>(
         .code_section()
         .expect("Module doesn't contain code section.");
 
-    let func_sig = &function_section.entries()[func_idx];
-    let func_type = get_function_type(module, func_sig);
+    let func = &function_section.entries()[func_idx];
+    let func_type = get_function_type(module, func);
     let func_body = &code_section.bodies()[func_idx];
 
     (func_type, func_body)
+}
+
+pub fn build_module(func_name: &str, func_type: &FunctionType, func_body: FuncBody) -> Module {
+    #[rustfmt::skip]
+    let module = parity_wasm::builder::module()
+        .export()
+            .field(func_name)
+            .internal()
+            .func(0)
+            .build()
+        .function()
+            .signature()
+                .with_params(func_type.params().to_vec())
+                .with_return_type(func_type.return_type())
+                .build()
+            .body()
+                .with_func(func_body)
+                .build()
+            .build()
+        .build();
+
+    module
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{debug, wasmi_utils};
+    use parity_wasm::elements::{Instruction, Instructions, ValueType};
+
+    #[test]
+    fn build_module_test() {
+        let func_type = FunctionType::new(vec![ValueType::I32], Some(ValueType::I32));
+        let func_body = FuncBody::new(
+            vec![],
+            Instructions::new(vec![
+                Instruction::GetLocal(0),
+                Instruction::GetLocal(0),
+                Instruction::I32Add,
+                Instruction::End,
+            ]),
+        );
+
+        let add_module = build_module("add", &func_type, func_body);
+        debug::print_functions(&add_module);
+        let instance = wasmi_utils::instantiate(add_module);
+        assert_eq!(
+            instance
+                .invoke_export(
+                    "add",
+                    &[wasmi::RuntimeValue::I32(3)],
+                    &mut wasmi::NopExternals,
+                )
+                .expect("failed to execute the function"),
+            Some(wasmi::RuntimeValue::I32(6))
+        );
+    }
 }

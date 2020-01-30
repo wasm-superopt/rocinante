@@ -14,3 +14,12 @@ pub fn func_by_name(instance: &ModuleInstance, func_name: &str) -> Result<FuncRe
         ))),
     }
 }
+
+#[cfg(test)]
+pub fn instantiate(module: parity_wasm::elements::Module) -> wasmi::ModuleRef {
+    let module =
+        wasmi::Module::from_parity_wasm_module(module).expect("Failed to load wasmi module.");
+    wasmi::ModuleInstance::new(&module, &wasmi::ImportsBuilder::default())
+        .expect("Failed to build wasmi module instance.")
+        .assert_no_start()
+}
