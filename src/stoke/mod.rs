@@ -2,7 +2,7 @@ use self::transform::*;
 use self::whitelist::*;
 use crate::{debug, exec, parity_wasm_utils, solver};
 use parity_wasm::elements::{
-    FuncBody, FunctionType, Instruction, Instructions, Internal, Module, ValueType,
+    FuncBody, FunctionType, Instruction, Instructions, Internal, Local, Module, ValueType,
 };
 use rand::seq::SliceRandom;
 use rand::Rng;
@@ -177,6 +177,20 @@ impl CandidateFunc {
 
     pub fn instrs_mut(&mut self) -> &mut Vec<Instruction> {
         &mut self.instrs
+    }
+
+    pub fn to_func_body(&self) -> FuncBody {
+        let locals: Vec<Local> = self
+            .local_types
+            .iter()
+            .map(|typ| Local::new(1, *typ))
+            .collect();
+
+        FuncBody::new(locals, Instructions::new(self.instrs.clone()))
+    }
+
+    pub fn to_module(&self) -> Module {
+        parity_wasm_utils::build_module("candidate", &self.func_type, self.to_func_body())
     }
 }
 
