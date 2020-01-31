@@ -1,3 +1,5 @@
+use self::transform::*;
+use self::whitelist::*;
 use crate::{debug, exec, parity_wasm_utils, solver};
 use parity_wasm::elements::{
     FuncBody, FunctionType, Instruction, Instructions, Internal, Module, ValueType,
@@ -5,10 +7,8 @@ use parity_wasm::elements::{
 use rand::seq::SliceRandom;
 use rand::Rng;
 
-use self::whitelist::*;
-mod whitelist;
-use self::transform::*;
-mod transform;
+pub mod transform;
+pub mod whitelist;
 
 #[allow(dead_code)]
 pub struct Superoptimizer {

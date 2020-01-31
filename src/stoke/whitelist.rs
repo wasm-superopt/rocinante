@@ -163,6 +163,61 @@ pub fn validate(instrs: &[Instruction]) {
     }
 }
 
+const I32BINOP: [WhitelistedInstruction; 15] = [
+    WhitelistedInstruction::I32Add,
+    WhitelistedInstruction::I32Sub,
+    WhitelistedInstruction::I32Mul,
+    WhitelistedInstruction::I32DivS,
+    WhitelistedInstruction::I32DivU,
+    WhitelistedInstruction::I32RemS,
+    WhitelistedInstruction::I32RemU,
+    WhitelistedInstruction::I32And,
+    WhitelistedInstruction::I32Or,
+    WhitelistedInstruction::I32Xor,
+    WhitelistedInstruction::I32Shl,
+    WhitelistedInstruction::I32ShrS,
+    WhitelistedInstruction::I32ShrU,
+    WhitelistedInstruction::I32Rotl,
+    WhitelistedInstruction::I32Rotr,
+];
+
+const VAROP: [fn(n: u32) -> WhitelistedInstruction; 3] = [
+    WhitelistedInstruction::GetLocal,
+    WhitelistedInstruction::SetLocal,
+    WhitelistedInstruction::TeeLocal,
+    // Instruction::GetGlobal,
+    // Instruction::SetGlobal,
+];
+
+pub fn get_equiv_instr<R: Rng + ?Sized>(rng: &mut R, instr: &Instruction) -> Instruction {
+    let w_instr: WhitelistedInstruction = instr.clone().into();
+
+    match w_instr {
+        WhitelistedInstruction::I32Add
+        | WhitelistedInstruction::I32Sub
+        | WhitelistedInstruction::I32Mul
+        | WhitelistedInstruction::I32DivS
+        | WhitelistedInstruction::I32DivU
+        | WhitelistedInstruction::I32RemS
+        | WhitelistedInstruction::I32RemU
+        | WhitelistedInstruction::I32And
+        | WhitelistedInstruction::I32Or
+        | WhitelistedInstruction::I32Xor
+        | WhitelistedInstruction::I32Shl
+        | WhitelistedInstruction::I32ShrS
+        | WhitelistedInstruction::I32ShrU
+        | WhitelistedInstruction::I32Rotl
+        | WhitelistedInstruction::I32Rotr => *I32BINOP.choose(rng).unwrap(),
+        WhitelistedInstruction::GetLocal(i)
+        | WhitelistedInstruction::SetLocal(i)
+        | WhitelistedInstruction::TeeLocal(i) => (*VAROP.choose(rng).unwrap())(i),
+        WhitelistedInstruction::I32Const(i) => WhitelistedInstruction::I32Const(i),
+        WhitelistedInstruction::End => WhitelistedInstruction::End,
+        WhitelistedInstruction::Nop => WhitelistedInstruction::Nop,
+    }
+    .into()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
