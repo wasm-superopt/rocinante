@@ -75,20 +75,20 @@ impl Superoptimizer {
 }
 
 #[derive(Debug)]
-pub enum Transform {
+pub enum TransformKind {
     Opcode,
     Operand,
     Swap,
     Instruction,
 }
 
-impl Distribution<Transform> for Standard {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Transform {
+impl Distribution<TransformKind> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> TransformKind {
         match rng.gen_range(0, 4) {
-            0 => Transform::Opcode,
-            1 => Transform::Operand,
-            2 => Transform::Swap,
-            _ => Transform::Instruction,
+            0 => TransformKind::Opcode,
+            1 => TransformKind::Operand,
+            2 => TransformKind::Swap,
+            _ => TransformKind::Instruction,
         }
     }
 }
@@ -195,13 +195,13 @@ impl Generator {
     }
 
     pub fn do_transform<R: Rng>(&mut self, rng: &mut R) {
-        let transform: Transform = rng.gen::<Transform>();
+        let transform_kind: TransformKind = rng.gen::<TransformKind>();
         let instrs = self.func_body.code().elements();
 
         let mut new_instrs = instrs.to_vec();
 
-        match transform {
-            Transform::Opcode => {
+        match transform_kind {
+            TransformKind::Opcode => {
                 // Choose an instruction at random, and replace with a random,
                 // equivalent one.
                 let idx: usize = rng.gen_range(0, instrs.len());
@@ -209,7 +209,7 @@ impl Generator {
                 let new_instr = self.get_equiv(rng, chosen_instr);
                 new_instrs[idx] = new_instr;
             }
-            Transform::Operand => {
+            TransformKind::Operand => {
                 // Select an instruction at random, and its operand is replaced by a
                 // random operand drawn from an equivalence class of operands.
                 let idx: usize = rng.gen_range(0, instrs.len());
@@ -229,7 +229,7 @@ impl Generator {
                 };
                 new_instrs[idx] = new_instr;
             }
-            Transform::Swap => {
+            TransformKind::Swap => {
                 // Select two instructions from the set of original instructions
                 // union with Nop, and swap
                 let idx1 = rng.gen_range(0, instrs.len() + 1);
@@ -245,7 +245,7 @@ impl Generator {
                     // Do nothing
                 }
             }
-            Transform::Instruction => {
+            TransformKind::Instruction => {
                 let idx = rng.gen_range(0, instrs.len());
                 let new_instr = WhitelistedInstruction::sample(
                     rng,
