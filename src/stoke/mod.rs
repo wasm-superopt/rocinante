@@ -22,7 +22,7 @@ impl Superoptimizer {
     pub fn run(&self) {}
 
     /// Finds a module that has functions equivalent to the functions in the given module.
-    pub fn synthesize(&self, rng: &mut impl Rng) {
+    pub fn synthesize(&self, rng: &mut impl Rng, constants: Vec<i32>) {
         // Module in wasmi, WASM interpreter. Instantiate this here and pass
         // down to exec module functions to avoid re-instantiation.
         let wasmi_module = wasmi::Module::from_parity_wasm_module(self.module.clone())
@@ -47,7 +47,7 @@ impl Superoptimizer {
                 let cfg = z3::Config::new();
                 let ctx = z3::Context::new(&cfg);
                 let z3solver = solver::Z3Solver::new(&ctx, func_type, func_body);
-                let mut generator = Generator::new(func_type);
+                let mut generator = Generator::new(func_type, constants.clone());
 
                 loop {
                     // TODO(taegyunkim): Implement undo of a transformation.
@@ -128,7 +128,7 @@ pub struct Generator {
 }
 
 impl Generator {
-    pub fn new(func_type: &FunctionType) -> Self {
+    pub fn new(func_type: &FunctionType, constants: Vec<i32>) -> Self {
         let instrs = vec![
             Instruction::GetLocal(0),
             Instruction::GetLocal(0),
@@ -140,7 +140,7 @@ impl Generator {
             func_type: func_type.clone(),
             func_body,
             local_types: Vec::new(),
-            constants: vec![-2, -1, 0, 1, 2],
+            constants,
         }
     }
 

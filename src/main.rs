@@ -69,6 +69,7 @@ fn main() {
     // Deserialize into an IR using parity-wasm.
     let module = Module::from_bytes(&binary).expect("Failed to deserialize.");
 
+    let constants = vec![-2, -1, 0, 1, 2];
     if let Some(_matches) = matches.subcommand_matches("print") {
         debug::print_functions(&module);
     } else {
@@ -76,6 +77,6 @@ fn main() {
         debug::print_functions(&module);
         let optimizer = stoke::Superoptimizer::new(module);
         let mut rng = rand::thread_rng();
-        optimizer.synthesize(&mut rng);
+        optimizer.synthesize(&mut rng, constants);
     }
 }
