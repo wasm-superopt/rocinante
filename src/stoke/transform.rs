@@ -32,33 +32,44 @@ pub struct TransformInfo {
     undo_instr: Instruction,
 }
 
-pub trait Transform {
-    fn kind(&self) -> TransformKind;
-    fn operate(
+pub struct Transform {
+    kind: TransformKind,
+}
+
+impl Distribution<Transform> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Transform {
+        Transform::new(rng.gen::<TransformKind>())
+    }
+}
+
+impl Transform {
+    pub fn new(kind: TransformKind) -> Self {
+        Self { kind }
+    }
+
+    pub fn kind(&self) -> TransformKind {
+        self.kind
+    }
+
+    pub fn operate(
         &self,
         rng: &mut rand::rngs::ThreadRng,
         candidate_func: &mut CandidateFunc,
-    ) -> TransformInfo;
-    fn undo(&self, transform_info: &TransformInfo, instrs: &mut CandidateFunc);
-}
-
-pub fn gen_transform(rng: &mut rand::rngs::ThreadRng) -> Box<dyn Transform> {
-    match rng.gen::<TransformKind>() {
-        TransformKind::Opcode => Box::new(OpcodeTransform {}),
-        TransformKind::Operand => Box::new(OperandTransform {}),
-        TransformKind::Swap => Box::new(SwapTransform {}),
-        TransformKind::Instruction => Box::new(InstructionTransform {}),
-    }
-}
-
-pub struct OpcodeTransform {}
-
-impl Transform for OpcodeTransform {
-    fn kind(&self) -> TransformKind {
-        TransformKind::Opcode
+    ) -> TransformInfo {
+        match self.kind() {
+            TransformKind::Opcode => self.opcode(rng, candidate_func),
+            unimplemented => {
+                panic!("Unimplemented: {:?}", unimplemented);
+            }
+        }
     }
 
-    fn operate(
+    pub fn undo(&self, transform_info: &TransformInfo, candidate_func: &mut CandidateFunc) {
+        candidate_func.instrs_mut()[transform_info.undo_indices[0]] =
+            transform_info.undo_instr.clone();
+    }
+
+    fn opcode(
         &self,
         rng: &mut rand::rngs::ThreadRng,
         candidate_func: &mut CandidateFunc,
@@ -76,110 +87,6 @@ impl Transform for OpcodeTransform {
             undo_indices: [idx, 0],
             undo_instr,
         }
-    }
-
-    fn undo(&self, transform_info: &TransformInfo, candidate_func: &mut CandidateFunc) {
-        candidate_func.instrs_mut()[transform_info.undo_indices[0]] =
-            transform_info.undo_instr.clone();
-    }
-}
-
-pub struct OperandTransform {}
-
-impl Transform for OperandTransform {
-    fn kind(&self) -> TransformKind {
-        TransformKind::Operand
-    }
-
-    fn operate(
-        &self,
-        rng: &mut rand::rngs::ThreadRng,
-        candidate_func: &mut CandidateFunc,
-    ) -> TransformInfo {
-        let (idx, undo_instr) = candidate_func.get_rand_instr(rng);
-        let instrs = candidate_func.instrs_mut();
-
-        let new_instr = whitelist::get_equiv_instr(rng, &undo_instr);
-
-        instrs[idx] = new_instr.clone();
-
-        TransformInfo {
-            success: new_instr != undo_instr,
-            kind: self.kind(),
-            undo_indices: [idx, 0],
-            undo_instr,
-        }
-    }
-
-    fn undo(&self, transform_info: &TransformInfo, candidate_func: &mut CandidateFunc) {
-        candidate_func.instrs_mut()[transform_info.undo_indices[0]] =
-            transform_info.undo_instr.clone();
-    }
-}
-
-pub struct SwapTransform {}
-
-impl Transform for SwapTransform {
-    fn kind(&self) -> TransformKind {
-        TransformKind::Operand
-    }
-
-    fn operate(
-        &self,
-        rng: &mut rand::rngs::ThreadRng,
-        candidate_func: &mut CandidateFunc,
-    ) -> TransformInfo {
-        let (idx, undo_instr) = candidate_func.get_rand_instr(rng);
-        let instrs = candidate_func.instrs_mut();
-
-        let new_instr = whitelist::get_equiv_instr(rng, &undo_instr);
-
-        instrs[idx] = new_instr.clone();
-
-        TransformInfo {
-            success: new_instr != undo_instr,
-            kind: self.kind(),
-            undo_indices: [idx, 0],
-            undo_instr,
-        }
-    }
-
-    fn undo(&self, transform_info: &TransformInfo, candidate_func: &mut CandidateFunc) {
-        candidate_func.instrs_mut()[transform_info.undo_indices[0]] =
-            transform_info.undo_instr.clone();
-    }
-}
-
-pub struct InstructionTransform {}
-
-impl Transform for InstructionTransform {
-    fn kind(&self) -> TransformKind {
-        TransformKind::Operand
-    }
-
-    fn operate(
-        &self,
-        rng: &mut rand::rngs::ThreadRng,
-        candidate_func: &mut CandidateFunc,
-    ) -> TransformInfo {
-        let (idx, undo_instr) = candidate_func.get_rand_instr(rng);
-        let instrs = candidate_func.instrs_mut();
-
-        let new_instr = whitelist::get_equiv_instr(rng, &undo_instr);
-
-        instrs[idx] = new_instr.clone();
-
-        TransformInfo {
-            success: new_instr != undo_instr,
-            kind: self.kind(),
-            undo_indices: [idx, 0],
-            undo_instr,
-        }
-    }
-
-    fn undo(&self, transform_info: &TransformInfo, candidate_func: &mut CandidateFunc) {
-        candidate_func.instrs_mut()[transform_info.undo_indices[0]] =
-            transform_info.undo_instr.clone();
     }
 }
 
@@ -190,7 +97,7 @@ mod test {
     use parity_wasm::elements::{FunctionType, ValueType};
     #[test]
     fn opcode_transform_test() {
-        let transform = OpcodeTransform {};
+        let transform = Transform::new(TransformKind::Opcode);
         assert_eq!(transform.kind(), TransformKind::Opcode);
 
         let original = CandidateFunc::new(

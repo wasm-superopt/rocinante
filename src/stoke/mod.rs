@@ -1,6 +1,6 @@
 use self::transform::*;
 use self::whitelist::*;
-use crate::{debug, exec, parity_wasm_utils, solver};
+use crate::{exec, parity_wasm_utils, solver};
 use parity_wasm::elements::{
     FuncBody, FunctionType, Instruction, Instructions, Internal, Local, Module, ValueType,
 };
@@ -23,7 +23,7 @@ impl Superoptimizer {
     pub fn run(&self) {}
 
     /// Finds a module that has functions equivalent to the functions in the given module.
-    pub fn synthesize(&self, rng: &mut impl Rng, constants: Vec<i32>) {
+    pub fn synthesize<R: Rng + ?Sized>(&self, rng: &mut R, constants: Vec<i32>) {
         // Module in wasmi, WASM interpreter. Instantiate this here and pass
         // down to exec module functions to avoid re-instantiation.
         let wasmi_module = wasmi::Module::from_parity_wasm_module(self.module.clone())
@@ -51,27 +51,25 @@ impl Superoptimizer {
                 let cfg = z3::Config::new();
                 let ctx = z3::Context::new(&cfg);
                 let z3solver = solver::Z3Solver::new(&ctx, func_type, func_body);
-                let mut generator = Generator::new(func_type, constants.clone());
 
+                let candidate_func = CandidateFunc::new(func_type, constants.clone());
+                let module = candidate_func.to_module();
+                let curr_cost = exec::eval_test_cases(module, &test_cases);
                 loop {
-                    // TODO(taegyunkim): Implement undo of a transformation.
-                    let module = generator.module();
-                    debug::print_functions(&module);
-                    if exec::eval_test_cases(module.clone(), &test_cases) > 0 {
-                        generator.do_transform(rng);
-                        continue;
-                    }
-                    match z3solver.verify(generator.get_candidate_func()) {
-                        solver::VerifyResult::Verified => {
-                            println!("Verified.");
-                            // collect the function from generator
-                            break;
-                        }
-                        solver::VerifyResult::CounterExample(_) => {
-                            // TODO(taegyunkim): Add input, output pair to the test cases.
-                            generator.do_transform(rng)
+                    if curr_cost == 0 {
+                        match z3solver.verify(&candidate_func.to_func_body()) {
+                            solver::VerifyResult::Verified => {
+                                println!("Verified.");
+                                break;
+                            }
+                            solver::VerifyResult::CounterExample(_) => {
+                                // TODO(taegyunkim): Add input, output pair to
+                                // the test casese.
+                            }
                         }
                     }
+
+                    let _transform = rng.gen::<Transform>();
                 }
             }
         }

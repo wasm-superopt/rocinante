@@ -61,7 +61,7 @@ pub fn hamming_distance(output1: &Output, output2: &Output) -> u32 {
 
 pub type TestCases = Vec<(Input, Output)>;
 
-fn gen_random_input<R: Rng>(rng: &mut R, param_types: &[ValueType]) -> Input {
+fn gen_random_input<R: Rng + ?Sized>(rng: &mut R, param_types: &[ValueType]) -> Input {
     let mut inputs = Vec::with_capacity(param_types.len());
 
     for param_type in param_types {
@@ -81,7 +81,7 @@ fn gen_random_input<R: Rng>(rng: &mut R, param_types: &[ValueType]) -> Input {
     inputs
 }
 
-pub fn generate_test_cases<R: Rng>(
+pub fn generate_test_cases<R: Rng + ?Sized>(
     rng: &mut R,
     instance: &wasmi::ModuleInstance,
     func_name: &str,
