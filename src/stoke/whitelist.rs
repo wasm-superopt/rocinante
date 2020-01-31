@@ -33,6 +33,7 @@ impl WhitelistedInstruction {
     pub fn sample<R: Rng + ?Sized>(
         rng: &mut R,
         param_types: &[ValueType],
+        constants: &[i32],
         // TODO: Support increasing the number of locals.
         _local_types: &mut Vec<ValueType>,
     ) -> WhitelistedInstruction {
@@ -52,10 +53,7 @@ impl WhitelistedInstruction {
             12 => WhitelistedInstruction::I32ShrU,
             13 => WhitelistedInstruction::I32Rotl,
             14 => WhitelistedInstruction::I32Rotr,
-            15 => {
-                let operands = vec![-2, -1, 0, 1, 2];
-                WhitelistedInstruction::I32Const(*operands.choose(rng).unwrap())
-            }
+            15 => WhitelistedInstruction::I32Const(*constants.choose(rng).unwrap()),
             16 => {
                 let idx = rng.gen_range(0, param_types.len()) as u32;
                 WhitelistedInstruction::GetLocal(idx)

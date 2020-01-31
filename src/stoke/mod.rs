@@ -123,6 +123,8 @@ pub struct Generator {
     func_type: FunctionType,
     func_body: FuncBody,
     local_types: Vec<ValueType>,
+    // TOOD(taegyunkim): Support i64, f32, f64 constants.
+    constants: Vec<i32>,
 }
 
 impl Generator {
@@ -138,6 +140,7 @@ impl Generator {
             func_type: func_type.clone(),
             func_body,
             local_types: Vec::new(),
+            constants: vec![-2, -1, 0, 1, 2],
         }
     }
 
@@ -187,6 +190,10 @@ impl Generator {
         *equiv_indices.choose(rng).unwrap() as u32
     }
 
+    fn sample_i32<R: Rng>(&self, rng: &mut R) -> i32 {
+        *self.constants.choose(rng).unwrap()
+    }
+
     pub fn do_transform<R: Rng>(&mut self, rng: &mut R) {
         let transform: Transform = rng.gen::<Transform>();
         let instrs = self.func_body.code().elements();
@@ -215,10 +222,7 @@ impl Generator {
                     _ if I32BINOP.contains(chosen_instr) => chosen_instr.clone(),
                     Instruction::End => Instruction::End,
                     Instruction::Nop => Instruction::Nop,
-                    Instruction::I32Const(_) => {
-                        let operands = vec![-2, -1, 0, 1, 2];
-                        Instruction::I32Const(*operands.choose(rng).unwrap())
-                    }
+                    Instruction::I32Const(_) => Instruction::I32Const(self.sample_i32(rng)),
                     _ => {
                         panic!("Not implemented");
                     }
@@ -246,6 +250,7 @@ impl Generator {
                 let new_instr = WhitelistedInstruction::sample(
                     rng,
                     self.func_type.params(),
+                    &self.constants,
                     &mut self.local_types,
                 );
                 new_instrs[idx] = new_instr.into();
