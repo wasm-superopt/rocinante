@@ -156,3 +156,47 @@ impl Into<Instruction> for WhitelistedInstruction {
         }
     }
 }
+
+pub fn validate(instrs: &[Instruction]) {
+    for instr in instrs {
+        let _: WhitelistedInstruction = instr.clone().into();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use parity_wasm::elements::Instruction;
+    #[test]
+    #[should_panic]
+    fn validate_panic_test() {
+        validate(&vec![Instruction::I32Clz]);
+    }
+
+    #[test]
+    fn validate_success_test() {
+        validate(&vec![
+            Instruction::I32Add,
+            Instruction::I32Sub,
+            Instruction::I32Mul,
+            Instruction::I32DivU,
+            Instruction::I32DivS,
+            Instruction::I32RemU,
+            Instruction::I32RemS,
+            Instruction::I32And,
+            Instruction::I32Or,
+            Instruction::I32Xor,
+            Instruction::I32Shl,
+            Instruction::I32ShrU,
+            Instruction::I32ShrS,
+            Instruction::I32Rotl,
+            Instruction::I32Rotr,
+            Instruction::I32Const(1),
+            Instruction::GetLocal(2),
+            Instruction::SetLocal(3),
+            Instruction::TeeLocal(4),
+            Instruction::End,
+            Instruction::Nop,
+        ]);
+    }
+}

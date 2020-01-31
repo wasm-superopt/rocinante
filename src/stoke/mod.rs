@@ -45,6 +45,9 @@ impl Superoptimizer {
                 let (func_type, func_body) =
                     parity_wasm_utils::func_by_name(&self.module, func_name);
 
+                // Check whether the spec contains only whitelisted instructions.
+                whitelist::validate(func_body.code().elements());
+
                 let cfg = z3::Config::new();
                 let ctx = z3::Context::new(&cfg);
                 let z3solver = solver::Z3Solver::new(&ctx, func_type, func_body);
