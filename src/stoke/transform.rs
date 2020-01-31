@@ -1,4 +1,5 @@
 use crate::stoke::whitelist;
+use crate::stoke::CandidateFunc;
 use parity_wasm::elements::Instruction;
 use rand::distributions::{Distribution, Standard};
 use rand::Rng;
@@ -23,7 +24,10 @@ impl Distribution<TransformKind> for Standard {
 }
 
 pub struct TransformInfo {
+    #[allow(dead_code)]
     success: bool,
+    #[allow(dead_code)]
+    kind: TransformKind,
     undo_indices: [usize; 2],
     undo_instr: Instruction,
 }
@@ -31,8 +35,8 @@ pub struct TransformInfo {
 pub trait Transform {
     fn new() -> Self;
     fn kind(&self) -> TransformKind;
-    fn operate<R: Rng>(&self, rng: &mut R, instrs: &mut [Instruction]) -> TransformInfo;
-    fn undo(&self, transform_info: &TransformInfo, instrs: &mut [Instruction]);
+    fn operate<R: Rng>(&self, rng: &mut R, candidate_func: &mut CandidateFunc) -> TransformInfo;
+    fn undo(&self, transform_info: &TransformInfo, instrs: &mut CandidateFunc);
 }
 
 pub struct OpcodeTransform {}
@@ -45,56 +49,87 @@ impl Transform for OpcodeTransform {
         TransformKind::Opcode
     }
 
-    fn operate<R: Rng>(&self, rng: &mut R, instrs: &mut [Instruction]) -> TransformInfo {
-        let mut ti = TransformInfo {
-            success: false,
-            undo_indices: [0, 0],
-            undo_instr: parity_wasm::elements::Instruction::Nop,
-        };
+    fn operate<R: Rng>(&self, rng: &mut R, candidate_func: &mut CandidateFunc) -> TransformInfo {
+        let (idx, undo_instr) = candidate_func.get_rand_instr(rng);
+        let instrs = candidate_func.instrs_mut();
 
-        let idx: usize = rng.gen_range(0, instrs.len());
-        ti.undo_indices[0] = idx;
-        ti.undo_instr = instrs[idx].clone();
+        let new_instr = whitelist::get_equiv_instr(rng, &undo_instr);
 
-        let new_instr = whitelist::get_equiv_instr(rng, &ti.undo_instr);
-        ti.success = new_instr != ti.undo_instr;
-        instrs[idx] = new_instr;
+        instrs[idx] = new_instr.clone();
 
-        ti
+        TransformInfo {
+            success: new_instr != undo_instr,
+            kind: self.kind(),
+            undo_indices: [idx, 0],
+            undo_instr,
+        }
     }
 
-    fn undo(&self, transform_info: &TransformInfo, instrs: &mut [Instruction]) {
-        instrs[transform_info.undo_indices[0]] = transform_info.undo_instr.clone();
+    fn undo(&self, transform_info: &TransformInfo, candidate_func: &mut CandidateFunc) {
+        candidate_func.instrs_mut()[transform_info.undo_indices[0]] =
+            transform_info.undo_instr.clone();
     }
 }
 
+pub struct OperandTransform {}
+
+impl Transform for OperandTransform {
+    fn new() -> Self {
+        Self {}
+    }
+
+    fn kind(&self) -> TransformKind {
+        TransformKind::Operand
+    }
+
+    fn operate<R: Rng>(&self, rng: &mut R, candidate_func: &mut CandidateFunc) -> TransformInfo {
+        let (idx, undo_instr) = candidate_func.get_rand_instr(rng);
+        let instrs = candidate_func.instrs_mut();
+
+        let new_instr = whitelist::get_equiv_instr(rng, &undo_instr);
+
+        instrs[idx] = new_instr.clone();
+
+        TransformInfo {
+            success: new_instr != undo_instr,
+            kind: self.kind(),
+            undo_indices: [idx, 0],
+            undo_instr,
+        }
+    }
+
+    fn undo(&self, transform_info: &TransformInfo, candidate_func: &mut CandidateFunc) {
+        candidate_func.instrs_mut()[transform_info.undo_indices[0]] =
+            transform_info.undo_instr.clone();
+    }
+}
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::stoke::CandidateFunc;
+    use parity_wasm::elements::{FunctionType, ValueType};
     #[test]
     fn opcode_transform_test() {
         let transform = OpcodeTransform::new();
         assert_eq!(transform.kind(), TransformKind::Opcode);
-        let original_instrs = vec![
-            Instruction::I32Add,
-            Instruction::I32Or,
-            Instruction::End,
-            Instruction::Nop,
-            Instruction::GetLocal(3),
-        ];
 
-        let mut transformed = original_instrs.clone();
+        let original = CandidateFunc::new(
+            &FunctionType::new(vec![ValueType::I32], Some(ValueType::I32)),
+            vec![-2, -1, 0, 1, 2],
+        );
+
+        let mut transformed = original.clone();
         let transform_info = transform.operate(&mut rand::thread_rng(), &mut transformed);
 
         if transform_info.success {
-            assert_ne!(transformed, original_instrs);
+            assert_ne!(transformed, original);
             println!("{:?}", transformed);
-            println!("{:?}", original_instrs);
+            println!("{:?}", original);
         }
 
         transform.undo(&transform_info, &mut transformed);
-        assert_eq!(transformed, original_instrs);
+        assert_eq!(transformed, original);
         println!("{:?}", transformed);
-        println!("{:?}", original_instrs);
+        println!("{:?}", original);
     }
 }

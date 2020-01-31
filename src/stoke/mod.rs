@@ -112,6 +112,74 @@ pub struct Generator {
     constants: Vec<i32>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CandidateFunc {
+    func_type: FunctionType,
+    local_types: Vec<ValueType>,
+    instrs: Vec<Instruction>,
+    constants: Vec<i32>,
+}
+
+impl CandidateFunc {
+    pub fn new(func_type: &FunctionType, constants: Vec<i32>) -> Self {
+        // TODO(taegyunkim): Generate a random program of length n.
+        let instrs = vec![
+            Instruction::GetLocal(0),
+            Instruction::GetLocal(0),
+            Instruction::I32Mul,
+            Instruction::End,
+        ];
+
+        Self {
+            func_type: func_type.clone(),
+            local_types: Vec::new(),
+            instrs,
+            constants,
+        }
+    }
+
+    pub fn get_rand_instr<R: Rng>(&self, rng: &mut R) -> (usize, Instruction) {
+        let indices = rand::seq::index::sample(rng, self.instrs.len(), 1);
+        (indices.index(0), self.instrs[indices.index(0)].clone())
+    }
+
+    pub fn get_equiv_idx<R: Rng>(&self, rng: &mut R, i: u32) -> u32 {
+        let i = i as usize;
+        let typ: &ValueType = if i < self.func_type.params().len() {
+            &self.func_type.params()[i]
+        } else if i < self.func_type.params().len() + self.local_types.len() {
+            &self.local_types[i]
+        } else {
+            panic!("local index out of bounds: {}", i);
+        };
+
+        let mut equiv_indices = Vec::new();
+        for (i, param_type) in self.func_type.params().iter().enumerate() {
+            if param_type == typ {
+                equiv_indices.push(i);
+            }
+        }
+
+        for (i, local_type) in self.local_types.iter().enumerate() {
+            if local_type == typ {
+                equiv_indices.push(i + self.func_type.params().len());
+            }
+        }
+
+        assert!(!equiv_indices.is_empty());
+
+        *equiv_indices.choose(rng).unwrap() as u32
+    }
+
+    pub fn sample_i32<R: Rng>(&self, rng: &mut R) -> i32 {
+        *self.constants.choose(rng).unwrap()
+    }
+
+    pub fn instrs_mut(&mut self) -> &mut Vec<Instruction> {
+        &mut self.instrs
+    }
+}
+
 impl Generator {
     pub fn new(func_type: &FunctionType, constants: Vec<i32>) -> Self {
         let instrs = vec![
