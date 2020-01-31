@@ -2,12 +2,13 @@ use crate::{debug, exec, parity_wasm_utils, solver};
 use parity_wasm::elements::{
     FuncBody, FunctionType, Instruction, Instructions, Internal, Module, ValueType,
 };
-use rand::distributions::{Distribution, Standard};
 use rand::seq::SliceRandom;
 use rand::Rng;
 
 use self::whitelist::*;
 mod whitelist;
+use self::transform::*;
+mod transform;
 
 #[allow(dead_code)]
 pub struct Superoptimizer {
@@ -70,25 +71,6 @@ impl Superoptimizer {
                     }
                 }
             }
-        }
-    }
-}
-
-#[derive(Debug)]
-pub enum TransformKind {
-    Opcode,
-    Operand,
-    Swap,
-    Instruction,
-}
-
-impl Distribution<TransformKind> for Standard {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> TransformKind {
-        match rng.gen_range(0, 4) {
-            0 => TransformKind::Opcode,
-            1 => TransformKind::Operand,
-            2 => TransformKind::Swap,
-            _ => TransformKind::Instruction,
         }
     }
 }
