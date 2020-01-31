@@ -33,23 +33,36 @@ pub struct TransformInfo {
 }
 
 pub trait Transform {
-    fn new() -> Self;
     fn kind(&self) -> TransformKind;
-    fn operate<R: Rng>(&self, rng: &mut R, candidate_func: &mut CandidateFunc) -> TransformInfo;
+    fn operate(
+        &self,
+        rng: &mut rand::rngs::ThreadRng,
+        candidate_func: &mut CandidateFunc,
+    ) -> TransformInfo;
     fn undo(&self, transform_info: &TransformInfo, instrs: &mut CandidateFunc);
+}
+
+pub fn gen_transform(rng: &mut rand::rngs::ThreadRng) -> Box<dyn Transform> {
+    match rng.gen::<TransformKind>() {
+        TransformKind::Opcode => Box::new(OpcodeTransform {}),
+        TransformKind::Operand => Box::new(OperandTransform {}),
+        TransformKind::Swap => Box::new(SwapTransform {}),
+        TransformKind::Instruction => Box::new(InstructionTransform {}),
+    }
 }
 
 pub struct OpcodeTransform {}
 
 impl Transform for OpcodeTransform {
-    fn new() -> Self {
-        OpcodeTransform {}
-    }
     fn kind(&self) -> TransformKind {
         TransformKind::Opcode
     }
 
-    fn operate<R: Rng>(&self, rng: &mut R, candidate_func: &mut CandidateFunc) -> TransformInfo {
+    fn operate(
+        &self,
+        rng: &mut rand::rngs::ThreadRng,
+        candidate_func: &mut CandidateFunc,
+    ) -> TransformInfo {
         let (idx, undo_instr) = candidate_func.get_rand_instr(rng);
         let instrs = candidate_func.instrs_mut();
 
@@ -74,15 +87,15 @@ impl Transform for OpcodeTransform {
 pub struct OperandTransform {}
 
 impl Transform for OperandTransform {
-    fn new() -> Self {
-        Self {}
-    }
-
     fn kind(&self) -> TransformKind {
         TransformKind::Operand
     }
 
-    fn operate<R: Rng>(&self, rng: &mut R, candidate_func: &mut CandidateFunc) -> TransformInfo {
+    fn operate(
+        &self,
+        rng: &mut rand::rngs::ThreadRng,
+        candidate_func: &mut CandidateFunc,
+    ) -> TransformInfo {
         let (idx, undo_instr) = candidate_func.get_rand_instr(rng);
         let instrs = candidate_func.instrs_mut();
 
@@ -103,6 +116,73 @@ impl Transform for OperandTransform {
             transform_info.undo_instr.clone();
     }
 }
+
+pub struct SwapTransform {}
+
+impl Transform for SwapTransform {
+    fn kind(&self) -> TransformKind {
+        TransformKind::Operand
+    }
+
+    fn operate(
+        &self,
+        rng: &mut rand::rngs::ThreadRng,
+        candidate_func: &mut CandidateFunc,
+    ) -> TransformInfo {
+        let (idx, undo_instr) = candidate_func.get_rand_instr(rng);
+        let instrs = candidate_func.instrs_mut();
+
+        let new_instr = whitelist::get_equiv_instr(rng, &undo_instr);
+
+        instrs[idx] = new_instr.clone();
+
+        TransformInfo {
+            success: new_instr != undo_instr,
+            kind: self.kind(),
+            undo_indices: [idx, 0],
+            undo_instr,
+        }
+    }
+
+    fn undo(&self, transform_info: &TransformInfo, candidate_func: &mut CandidateFunc) {
+        candidate_func.instrs_mut()[transform_info.undo_indices[0]] =
+            transform_info.undo_instr.clone();
+    }
+}
+
+pub struct InstructionTransform {}
+
+impl Transform for InstructionTransform {
+    fn kind(&self) -> TransformKind {
+        TransformKind::Operand
+    }
+
+    fn operate(
+        &self,
+        rng: &mut rand::rngs::ThreadRng,
+        candidate_func: &mut CandidateFunc,
+    ) -> TransformInfo {
+        let (idx, undo_instr) = candidate_func.get_rand_instr(rng);
+        let instrs = candidate_func.instrs_mut();
+
+        let new_instr = whitelist::get_equiv_instr(rng, &undo_instr);
+
+        instrs[idx] = new_instr.clone();
+
+        TransformInfo {
+            success: new_instr != undo_instr,
+            kind: self.kind(),
+            undo_indices: [idx, 0],
+            undo_instr,
+        }
+    }
+
+    fn undo(&self, transform_info: &TransformInfo, candidate_func: &mut CandidateFunc) {
+        candidate_func.instrs_mut()[transform_info.undo_indices[0]] =
+            transform_info.undo_instr.clone();
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -110,7 +190,7 @@ mod test {
     use parity_wasm::elements::{FunctionType, ValueType};
     #[test]
     fn opcode_transform_test() {
-        let transform = OpcodeTransform::new();
+        let transform = OpcodeTransform {};
         assert_eq!(transform.kind(), TransformKind::Opcode);
 
         let original = CandidateFunc::new(
