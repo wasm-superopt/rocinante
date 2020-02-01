@@ -60,6 +60,7 @@ impl Transform {
         match self.kind() {
             TransformKind::Opcode => self.opcode(rng, candidate_func),
             TransformKind::Operand => self.operand(rng, candidate_func),
+            TransformKind::Swap => self.swap(rng, candidate_func),
             unimplemented => {
                 panic!("Unimplemented: {:?}", unimplemented);
             }
@@ -71,6 +72,12 @@ impl Transform {
             TransformKind::Opcode | TransformKind::Operand => {
                 candidate_func.instrs_mut()[transform_info.undo_indices[0]] =
                     transform_info.undo_instr.clone();
+            }
+            TransformKind::Swap => {
+                candidate_func.instrs_mut().swap(
+                    transform_info.undo_indices[0],
+                    transform_info.undo_indices[1],
+                );
             }
             unimplemented => {
                 panic!("Unimplemented: {:?}", unimplemented);
@@ -151,6 +158,24 @@ impl Transform {
             undo_instr,
         }
     }
+
+    fn swap<R: Rng + ?Sized>(
+        &self,
+        rng: &mut R,
+        candidate_func: &mut CandidateFunc,
+    ) -> TransformInfo {
+        let idx1 = rng.gen_range(0, candidate_func.instrs().len());
+        let idx2 = rng.gen_range(0, candidate_func.instrs().len());
+
+        candidate_func.instrs_mut().swap(idx1, idx2);
+
+        TransformInfo {
+            success: idx1 != idx2,
+            kind: self.kind(),
+            undo_indices: [idx1, idx2],
+            undo_instr: parity_wasm::elements::Instruction::Nop,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -187,6 +212,31 @@ mod test {
     fn operand_transform_test() {
         let transform = Transform::new(TransformKind::Operand);
         assert_eq!(transform.kind(), TransformKind::Operand);
+
+        let original = CandidateFunc::new(
+            &FunctionType::new(vec![ValueType::I32], Some(ValueType::I32)),
+            vec![-2, -1, 0, 1, 2],
+        );
+
+        let mut transformed = original.clone();
+        let transform_info = transform.operate(&mut rand::thread_rng(), &mut transformed);
+
+        if transform_info.success {
+            assert_ne!(transformed, original);
+            println!("{:?}", transformed);
+            println!("{:?}", original);
+        }
+
+        transform.undo(&transform_info, &mut transformed);
+        assert_eq!(transformed, original);
+        println!("{:?}", transformed);
+        println!("{:?}", original);
+    }
+
+    #[test]
+    fn swap_transform_test() {
+        let transform = Transform::new(TransformKind::Swap);
+        assert_eq!(transform.kind(), TransformKind::Swap);
 
         let original = CandidateFunc::new(
             &FunctionType::new(vec![ValueType::I32], Some(ValueType::I32)),

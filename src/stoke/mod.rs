@@ -173,6 +173,10 @@ impl CandidateFunc {
         *self.constants.choose(rng).unwrap()
     }
 
+    pub fn instrs(&self) -> &[Instruction] {
+        &self.instrs
+    }
+
     pub fn instrs_mut(&mut self) -> &mut Vec<Instruction> {
         &mut self.instrs
     }
