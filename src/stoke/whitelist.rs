@@ -1,4 +1,5 @@
-use parity_wasm::elements::{Instruction, ValueType};
+use crate::stoke::CandidateFunc;
+use parity_wasm::elements::Instruction;
 use rand::seq::SliceRandom;
 use rand::Rng;
 
@@ -32,10 +33,8 @@ pub enum WhitelistedInstruction {
 impl WhitelistedInstruction {
     pub fn sample<R: Rng + ?Sized>(
         rng: &mut R,
-        param_types: &[ValueType],
-        constants: &[i32],
-        // TODO: Support increasing the number of locals.
-        _local_types: &mut Vec<ValueType>,
+        // TODO(taegyunkim): Support increasing the number of locals.
+        candidate_func: &mut CandidateFunc,
     ) -> WhitelistedInstruction {
         match rng.gen_range(0, 21) {
             0 => WhitelistedInstruction::I32Add,
@@ -53,19 +52,10 @@ impl WhitelistedInstruction {
             12 => WhitelistedInstruction::I32ShrU,
             13 => WhitelistedInstruction::I32Rotl,
             14 => WhitelistedInstruction::I32Rotr,
-            15 => WhitelistedInstruction::I32Const(*constants.choose(rng).unwrap()),
-            16 => {
-                let idx = rng.gen_range(0, param_types.len()) as u32;
-                WhitelistedInstruction::GetLocal(idx)
-            }
-            17 => {
-                let idx = rng.gen_range(0, param_types.len()) as u32;
-                WhitelistedInstruction::SetLocal(idx)
-            }
-            18 => {
-                let idx = rng.gen_range(0, param_types.len()) as u32;
-                WhitelistedInstruction::TeeLocal(idx)
-            }
+            15 => WhitelistedInstruction::I32Const(candidate_func.sample_i32(rng)),
+            16 => WhitelistedInstruction::GetLocal(candidate_func.sample_local_idx(rng)),
+            17 => WhitelistedInstruction::SetLocal(candidate_func.sample_local_idx(rng)),
+            18 => WhitelistedInstruction::TeeLocal(candidate_func.sample_local_idx(rng)),
             19 => WhitelistedInstruction::End,
             _ => WhitelistedInstruction::Nop,
         }

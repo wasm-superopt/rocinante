@@ -1,5 +1,4 @@
 use self::transform::*;
-use self::whitelist::*;
 use crate::{exec, parity_wasm_utils, solver};
 use parity_wasm::elements::{
     FuncBody, FunctionType, Instruction, Instructions, Internal, Local, Module, ValueType,
@@ -76,40 +75,6 @@ impl Superoptimizer {
     }
 }
 
-const I32BINOP: [Instruction; 15] = [
-    Instruction::I32Add,
-    Instruction::I32Sub,
-    Instruction::I32Mul,
-    Instruction::I32DivS,
-    Instruction::I32DivU,
-    Instruction::I32RemS,
-    Instruction::I32RemU,
-    Instruction::I32And,
-    Instruction::I32Or,
-    Instruction::I32Xor,
-    Instruction::I32Shl,
-    Instruction::I32ShrS,
-    Instruction::I32ShrU,
-    Instruction::I32Rotl,
-    Instruction::I32Rotr,
-];
-
-const VAROP: [fn(n: u32) -> Instruction; 3] = [
-    Instruction::GetLocal,
-    Instruction::SetLocal,
-    Instruction::TeeLocal,
-    // Instruction::GetGlobal,
-    // Instruction::SetGlobal,
-];
-
-pub struct Generator {
-    func_type: FunctionType,
-    func_body: FuncBody,
-    local_types: Vec<ValueType>,
-    // TOOD(taegyunkim): Support i64, f32, f64 constants.
-    constants: Vec<i32>,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CandidateFunc {
     func_type: FunctionType,
@@ -169,6 +134,10 @@ impl CandidateFunc {
         *equiv_indices.choose(rng).unwrap() as u32
     }
 
+    pub fn sample_local_idx<R: Rng + ?Sized>(&self, rng: &mut R) -> u32 {
+        rng.gen_range(0, self.func_type.params().len() + self.local_types.len()) as u32
+    }
+
     pub fn sample_i32<R: Rng + ?Sized>(&self, rng: &mut R) -> i32 {
         *self.constants.choose(rng).unwrap()
     }
@@ -193,150 +162,5 @@ impl CandidateFunc {
 
     pub fn to_module(&self) -> Module {
         parity_wasm_utils::build_module("candidate", &self.func_type, self.to_func_body())
-    }
-}
-
-impl Generator {
-    pub fn new(func_type: &FunctionType, constants: Vec<i32>) -> Self {
-        let instrs = vec![
-            Instruction::GetLocal(0),
-            Instruction::GetLocal(0),
-            Instruction::I32Mul,
-            Instruction::End,
-        ];
-        let func_body = FuncBody::new(vec![], Instructions::new(instrs));
-        Self {
-            func_type: func_type.clone(),
-            func_body,
-            local_types: Vec::new(),
-            constants,
-        }
-    }
-
-    fn get_equiv<R: Rng + ?Sized>(&self, rng: &mut R, instr: &Instruction) -> Instruction {
-        // Make sure this instruction is whitelisted.
-        let _: WhitelistedInstruction = instr.clone().into();
-
-        match instr {
-            _ if I32BINOP.contains(instr) => I32BINOP.choose(rng).unwrap().clone(),
-            Instruction::GetLocal(i) | Instruction::SetLocal(i) | Instruction::TeeLocal(i) => {
-                (*VAROP.choose(rng).unwrap())(*i)
-            }
-            Instruction::I32Const(i) => Instruction::I32Const(*i),
-            Instruction::End => Instruction::End,
-            Instruction::Nop => Instruction::Nop,
-            _ => {
-                panic!("not implemented.");
-            }
-        }
-    }
-
-    fn get_equiv_idx<R: Rng + ?Sized>(&self, rng: &mut R, i: u32) -> u32 {
-        let i = i as usize;
-        let typ: &ValueType = if i < self.func_type.params().len() {
-            &self.func_type.params()[i]
-        } else if i < self.func_type.params().len() + self.local_types.len() {
-            &self.local_types[i]
-        } else {
-            panic!("local index out of bounds: {}", i);
-        };
-
-        let mut equiv_indices = Vec::new();
-        for (i, param_type) in self.func_type.params().iter().enumerate() {
-            if param_type == typ {
-                equiv_indices.push(i);
-            }
-        }
-
-        for (i, local_type) in self.local_types.iter().enumerate() {
-            if local_type == typ {
-                equiv_indices.push(i + self.func_type.params().len());
-            }
-        }
-
-        assert!(!equiv_indices.is_empty());
-
-        *equiv_indices.choose(rng).unwrap() as u32
-    }
-
-    fn sample_i32<R: Rng>(&self, rng: &mut R) -> i32 {
-        *self.constants.choose(rng).unwrap()
-    }
-
-    pub fn do_transform<R: Rng>(&mut self, rng: &mut R) {
-        let transform_kind: TransformKind = rng.gen::<TransformKind>();
-        let instrs = self.func_body.code().elements();
-
-        let mut new_instrs = instrs.to_vec();
-
-        match transform_kind {
-            TransformKind::Opcode => {
-                // Choose an instruction at random, and replace with a random,
-                // equivalent one.
-                let idx: usize = rng.gen_range(0, instrs.len());
-                let chosen_instr = &instrs[idx];
-                let new_instr = self.get_equiv(rng, chosen_instr);
-                new_instrs[idx] = new_instr;
-            }
-            TransformKind::Operand => {
-                // Select an instruction at random, and its operand is replaced by a
-                // random operand drawn from an equivalence class of operands.
-                let idx: usize = rng.gen_range(0, instrs.len());
-                let chosen_instr = &instrs[idx];
-
-                let new_instr = match chosen_instr {
-                    Instruction::GetLocal(i) => Instruction::GetLocal(self.get_equiv_idx(rng, *i)),
-                    Instruction::SetLocal(i) => Instruction::SetLocal(self.get_equiv_idx(rng, *i)),
-                    Instruction::TeeLocal(i) => Instruction::SetLocal(self.get_equiv_idx(rng, *i)),
-                    _ if I32BINOP.contains(chosen_instr) => chosen_instr.clone(),
-                    Instruction::End => Instruction::End,
-                    Instruction::Nop => Instruction::Nop,
-                    Instruction::I32Const(_) => Instruction::I32Const(self.sample_i32(rng)),
-                    _ => {
-                        panic!("Not implemented");
-                    }
-                };
-                new_instrs[idx] = new_instr;
-            }
-            TransformKind::Swap => {
-                // Select two instructions from the set of original instructions
-                // union with Nop, and swap
-                let idx1 = rng.gen_range(0, instrs.len() + 1);
-                let idx2 = rng.gen_range(0, instrs.len() + 1);
-                if idx1 < instrs.len() && idx2 < instrs.len() {
-                    new_instrs[idx1] = instrs[idx2].clone();
-                    new_instrs[idx2] = instrs[idx1].clone();
-                } else if idx1 < instrs.len() && idx2 >= instrs.len() {
-                    new_instrs[idx1] = Instruction::Nop;
-                } else if idx1 >= instrs.len() && idx2 < instrs.len() {
-                    new_instrs[idx2] = Instruction::Nop;
-                } else {
-                    // Do nothing
-                }
-            }
-            TransformKind::Instruction => {
-                let idx = rng.gen_range(0, instrs.len());
-                let new_instr = WhitelistedInstruction::sample(
-                    rng,
-                    self.func_type.params(),
-                    &self.constants,
-                    &mut self.local_types,
-                );
-                new_instrs[idx] = new_instr.into();
-            }
-        }
-
-        self.func_body
-            .code_mut()
-            .elements_mut()
-            .clone_from(&new_instrs);
-    }
-
-    pub fn module(&self) -> Module {
-        parity_wasm_utils::build_module("candidate", &self.func_type, self.func_body.clone())
-    }
-
-    pub fn get_candidate_func(&self) -> &FuncBody {
-        &self.func_body
     }
 }

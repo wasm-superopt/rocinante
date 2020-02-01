@@ -61,15 +61,13 @@ impl Transform {
             TransformKind::Opcode => self.opcode(rng, candidate_func),
             TransformKind::Operand => self.operand(rng, candidate_func),
             TransformKind::Swap => self.swap(rng, candidate_func),
-            unimplemented => {
-                panic!("Unimplemented: {:?}", unimplemented);
-            }
+            TransformKind::Instruction => self.instruction(rng, candidate_func),
         }
     }
 
     pub fn undo(&self, transform_info: &TransformInfo, candidate_func: &mut CandidateFunc) {
         match transform_info.kind {
-            TransformKind::Opcode | TransformKind::Operand => {
+            TransformKind::Opcode | TransformKind::Operand | TransformKind::Instruction => {
                 candidate_func.instrs_mut()[transform_info.undo_indices[0]] =
                     transform_info.undo_instr.clone();
             }
@@ -78,9 +76,6 @@ impl Transform {
                     transform_info.undo_indices[0],
                     transform_info.undo_indices[1],
                 );
-            }
-            unimplemented => {
-                panic!("Unimplemented: {:?}", unimplemented);
             }
         }
     }
@@ -148,7 +143,6 @@ impl Transform {
         .into();
 
         let instrs = candidate_func.instrs_mut();
-
         instrs[instr_idx] = new_instr.clone();
 
         TransformInfo {
@@ -164,16 +158,35 @@ impl Transform {
         rng: &mut R,
         candidate_func: &mut CandidateFunc,
     ) -> TransformInfo {
-        let idx1 = rng.gen_range(0, candidate_func.instrs().len());
-        let idx2 = rng.gen_range(0, candidate_func.instrs().len());
+        let (idx1, instr1) = candidate_func.get_rand_instr(rng);
+        let (idx2, instr2) = candidate_func.get_rand_instr(rng);
 
         candidate_func.instrs_mut().swap(idx1, idx2);
 
         TransformInfo {
-            success: idx1 != idx2,
+            success: idx1 != idx2 && instr1 != instr2,
             kind: self.kind(),
             undo_indices: [idx1, idx2],
             undo_instr: parity_wasm::elements::Instruction::Nop,
+        }
+    }
+
+    fn instruction<R: Rng + ?Sized>(
+        &self,
+        rng: &mut R,
+        candidate_func: &mut CandidateFunc,
+    ) -> TransformInfo {
+        let (instr_idx, undo_instr) = candidate_func.get_rand_instr(rng);
+
+        let new_instr: Instruction = WhitelistedInstruction::sample(rng, candidate_func).into();
+        let instrs = candidate_func.instrs_mut();
+        instrs[instr_idx] = new_instr.clone();
+
+        TransformInfo {
+            success: new_instr != undo_instr,
+            kind: self.kind(),
+            undo_indices: [instr_idx, 0],
+            undo_instr,
         }
     }
 }
