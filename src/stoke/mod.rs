@@ -136,12 +136,12 @@ impl CandidateFunc {
         }
     }
 
-    pub fn get_rand_instr<R: Rng>(&self, rng: &mut R) -> (usize, Instruction) {
+    pub fn get_rand_instr<R: Rng + ?Sized>(&self, rng: &mut R) -> (usize, Instruction) {
         let indices = rand::seq::index::sample(rng, self.instrs.len(), 1);
         (indices.index(0), self.instrs[indices.index(0)].clone())
     }
 
-    pub fn get_equiv_idx<R: Rng>(&self, rng: &mut R, i: u32) -> u32 {
+    pub fn get_equiv_local_idx<R: Rng + ?Sized>(&self, rng: &mut R, i: u32) -> u32 {
         let i = i as usize;
         let typ: &ValueType = if i < self.func_type.params().len() {
             &self.func_type.params()[i]
@@ -169,7 +169,7 @@ impl CandidateFunc {
         *equiv_indices.choose(rng).unwrap() as u32
     }
 
-    pub fn sample_i32<R: Rng>(&self, rng: &mut R) -> i32 {
+    pub fn sample_i32<R: Rng + ?Sized>(&self, rng: &mut R) -> i32 {
         *self.constants.choose(rng).unwrap()
     }
 

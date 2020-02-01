@@ -3,6 +3,7 @@ use crate::stoke::CandidateFunc;
 use parity_wasm::elements::Instruction;
 use rand::distributions::{Distribution, Standard};
 use rand::Rng;
+use whitelist::WhitelistedInstruction;
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum TransformKind {
@@ -51,13 +52,14 @@ impl Transform {
         self.kind
     }
 
-    pub fn operate(
+    pub fn operate<R: Rng + ?Sized>(
         &self,
-        rng: &mut rand::rngs::ThreadRng,
+        rng: &mut R,
         candidate_func: &mut CandidateFunc,
     ) -> TransformInfo {
         match self.kind() {
             TransformKind::Opcode => self.opcode(rng, candidate_func),
+            TransformKind::Operand => self.operand(rng, candidate_func),
             unimplemented => {
                 panic!("Unimplemented: {:?}", unimplemented);
             }
@@ -65,13 +67,20 @@ impl Transform {
     }
 
     pub fn undo(&self, transform_info: &TransformInfo, candidate_func: &mut CandidateFunc) {
-        candidate_func.instrs_mut()[transform_info.undo_indices[0]] =
-            transform_info.undo_instr.clone();
+        match transform_info.kind {
+            TransformKind::Opcode | TransformKind::Operand => {
+                candidate_func.instrs_mut()[transform_info.undo_indices[0]] =
+                    transform_info.undo_instr.clone();
+            }
+            unimplemented => {
+                panic!("Unimplemented: {:?}", unimplemented);
+            }
+        }
     }
 
-    fn opcode(
+    fn opcode<R: Rng + ?Sized>(
         &self,
-        rng: &mut rand::rngs::ThreadRng,
+        rng: &mut R,
         candidate_func: &mut CandidateFunc,
     ) -> TransformInfo {
         let (idx, undo_instr) = candidate_func.get_rand_instr(rng);
@@ -88,6 +97,60 @@ impl Transform {
             undo_instr,
         }
     }
+
+    fn operand<R: Rng + ?Sized>(
+        &self,
+        rng: &mut R,
+        candidate_func: &mut CandidateFunc,
+    ) -> TransformInfo {
+        let (instr_idx, undo_instr) = candidate_func.get_rand_instr(rng);
+
+        // NOTE(taegyunkim): Force conversion to WhitelistedInstruction to avoid
+        // a situation where we get a missing case leading to a bug.
+        let new_instr: Instruction = match undo_instr.clone().into() {
+            WhitelistedInstruction::GetLocal(i) => {
+                WhitelistedInstruction::GetLocal(candidate_func.get_equiv_local_idx(rng, i))
+            }
+            WhitelistedInstruction::SetLocal(i) => {
+                WhitelistedInstruction::SetLocal(candidate_func.get_equiv_local_idx(rng, i))
+            }
+            WhitelistedInstruction::TeeLocal(i) => {
+                WhitelistedInstruction::SetLocal(candidate_func.get_equiv_local_idx(rng, i))
+            }
+            WhitelistedInstruction::I32Add => WhitelistedInstruction::I32Add,
+            WhitelistedInstruction::I32Sub => WhitelistedInstruction::I32Sub,
+            WhitelistedInstruction::I32Mul => WhitelistedInstruction::I32Mul,
+            WhitelistedInstruction::I32DivS => WhitelistedInstruction::I32DivS,
+            WhitelistedInstruction::I32DivU => WhitelistedInstruction::I32DivU,
+            WhitelistedInstruction::I32RemS => WhitelistedInstruction::I32RemS,
+            WhitelistedInstruction::I32RemU => WhitelistedInstruction::I32RemU,
+            WhitelistedInstruction::I32And => WhitelistedInstruction::I32And,
+            WhitelistedInstruction::I32Or => WhitelistedInstruction::I32Or,
+            WhitelistedInstruction::I32Xor => WhitelistedInstruction::I32Xor,
+            WhitelistedInstruction::I32Shl => WhitelistedInstruction::I32Shl,
+            WhitelistedInstruction::I32ShrS => WhitelistedInstruction::I32ShrS,
+            WhitelistedInstruction::I32ShrU => WhitelistedInstruction::I32ShrU,
+            WhitelistedInstruction::I32Rotl => WhitelistedInstruction::I32Rotl,
+            WhitelistedInstruction::I32Rotr => WhitelistedInstruction::I32Rotr,
+            WhitelistedInstruction::End => WhitelistedInstruction::End,
+            WhitelistedInstruction::Nop => WhitelistedInstruction::Nop,
+            WhitelistedInstruction::I32Const(_) => {
+                WhitelistedInstruction::I32Const(candidate_func.sample_i32(rng))
+            }
+        }
+        .into();
+
+        let instrs = candidate_func.instrs_mut();
+
+        instrs[instr_idx] = new_instr.clone();
+
+        TransformInfo {
+            success: new_instr != undo_instr,
+            kind: self.kind(),
+            undo_indices: [instr_idx, 0],
+            undo_instr,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -99,6 +162,31 @@ mod test {
     fn opcode_transform_test() {
         let transform = Transform::new(TransformKind::Opcode);
         assert_eq!(transform.kind(), TransformKind::Opcode);
+
+        let original = CandidateFunc::new(
+            &FunctionType::new(vec![ValueType::I32], Some(ValueType::I32)),
+            vec![-2, -1, 0, 1, 2],
+        );
+
+        let mut transformed = original.clone();
+        let transform_info = transform.operate(&mut rand::thread_rng(), &mut transformed);
+
+        if transform_info.success {
+            assert_ne!(transformed, original);
+            println!("{:?}", transformed);
+            println!("{:?}", original);
+        }
+
+        transform.undo(&transform_info, &mut transformed);
+        assert_eq!(transformed, original);
+        println!("{:?}", transformed);
+        println!("{:?}", original);
+    }
+
+    #[test]
+    fn operand_transform_test() {
+        let transform = Transform::new(TransformKind::Operand);
+        assert_eq!(transform.kind(), TransformKind::Operand);
 
         let original = CandidateFunc::new(
             &FunctionType::new(vec![ValueType::I32], Some(ValueType::I32)),
