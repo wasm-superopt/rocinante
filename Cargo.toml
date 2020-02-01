@@ -18,6 +18,8 @@ A superoptimizer for WebAssembly
 clap = "*"
 parity-wasm = "*"
 rand = "*"
+strum = "*"
+strum_macros = "*"
 wabt = "*"
 wasmi = "*"
 wasmparser = "*"

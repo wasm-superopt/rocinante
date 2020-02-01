@@ -1,8 +1,9 @@
 use self::transform::*;
-use crate::{exec, parity_wasm_utils, solver};
+use crate::{exec, parity_wasm_utils, solver, Algorithm};
 use parity_wasm::elements::{
     FuncBody, FunctionType, Instruction, Instructions, Internal, Local, Module, ValueType,
 };
+use rand::distributions::{Bernoulli, Distribution};
 use rand::seq::SliceRandom;
 use rand::Rng;
 
@@ -11,12 +12,13 @@ pub mod whitelist;
 
 #[allow(dead_code)]
 pub struct Superoptimizer {
+    algorithm: Algorithm,
     module: Module,
 }
 
 impl Superoptimizer {
-    pub fn new(module: Module) -> Self {
-        Superoptimizer { module }
+    pub fn new(algorithm: Algorithm, module: Module) -> Self {
+        Superoptimizer { algorithm, module }
     }
 
     pub fn run(&self) {}
@@ -51,9 +53,9 @@ impl Superoptimizer {
                 let ctx = z3::Context::new(&cfg);
                 let z3solver = solver::Z3Solver::new(&ctx, func_type, func_body);
 
-                let candidate_func = CandidateFunc::new(func_type, constants.clone());
-                let module = candidate_func.to_module();
-                let curr_cost = exec::eval_test_cases(module, &test_cases);
+                let mut candidate_func = CandidateFunc::new(func_type, constants.clone());
+                let mut module = candidate_func.to_module();
+                let mut curr_cost = exec::eval_test_cases(module, &test_cases);
                 loop {
                     if curr_cost == 0 {
                         match z3solver.verify(&candidate_func.to_func_body()) {
@@ -68,7 +70,34 @@ impl Superoptimizer {
                         }
                     }
 
-                    let _transform = rng.gen::<Transform>();
+                    let transform = rng.gen::<Transform>();
+                    let transform_info = transform.operate(rng, &mut candidate_func);
+
+                    module = candidate_func.to_module();
+                    let new_cost = exec::eval_test_cases(module, &test_cases);
+
+                    match self.algorithm {
+                        Algorithm::Random => {
+                            // Always accept transform.
+                            curr_cost = new_cost;
+                        }
+                        Algorithm::Stoke => {
+                            if new_cost < curr_cost {
+                                // Accept this transform.
+                                curr_cost = new_cost;
+                            } else {
+                                // Following computes min(1, exp(-1.0 * new_cost/ curr_cost))
+                                // TODO(taegyunkim): Use parameter \beta instead of -1.0
+                                let p: f64 = (1.0 as f64)
+                                    .min((-1.0 * (new_cost as f64) / (curr_cost as f64)).exp());
+                                let d = Bernoulli::new(p).unwrap();
+                                let accept = d.sample(rng);
+                                if !accept {
+                                    transform.undo(&transform_info, &mut candidate_func);
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
