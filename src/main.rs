@@ -56,8 +56,8 @@ fn main() {
         .arg(
             Arg::with_name("algorithm")
                 .help("Superoptimization algorithm to use.")
-                .possible_value("random")
-                .possible_value("stoke"),
+                .possible_value("Random")
+                .possible_value("Stoke"),
         )
         .subcommand(
             SubCommand::with_name("print").about("Prints all functions in the given module."),
@@ -89,7 +89,7 @@ fn main() {
     if let Some(_matches) = matches.subcommand_matches("print") {
         debug::print_functions(&module);
     } else {
-        let algorithm = matches.value_of("algorithm").unwrap_or("stoke");
+        let algorithm = matches.value_of("algorithm").unwrap_or("Stoke");
         // TODO(taegyunkim): Propagate the template function.
         debug::print_functions(&module);
         let optimizer = stoke::Superoptimizer::new(Algorithm::from_str(algorithm).unwrap(), module);

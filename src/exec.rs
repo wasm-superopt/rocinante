@@ -109,15 +109,26 @@ pub fn invoke_with_inputs(func_ref: &FuncRef, inputs: &[Input]) -> Vec<Output> {
     outputs
 }
 
+fn catch_unwind_silent<F: FnOnce() -> R + std::panic::UnwindSafe, R>(
+    f: F,
+) -> std::thread::Result<R> {
+    let prev_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
+    let result = std::panic::catch_unwind(f);
+    std::panic::set_hook(prev_hook);
+    result
+}
+
 // NOTE(taegyunkim): The return type of this function is unsigned instead of
 // signed because it represents the sum of hamming distances. When it overflows,
 // rust will panic.
 pub fn eval_test_cases(
-    module: parity_wasm::elements::Module,
+    module: &parity_wasm::elements::Module,
     test_cases: &[(Input, Output)],
 ) -> u32 {
     // The module is validated this step.
-    let result_or_err = std::panic::catch_unwind(|| wasmi::Module::from_parity_wasm_module(module));
+    let result_or_err =
+        catch_unwind_silent(|| wasmi::Module::from_parity_wasm_module(module.clone()));
     if result_or_err.is_err() {
         return 64 * test_cases.len() as u32;
     }

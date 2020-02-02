@@ -1,5 +1,5 @@
 use self::transform::*;
-use crate::{exec, parity_wasm_utils, solver, Algorithm};
+use crate::{debug, exec, parity_wasm_utils, solver, Algorithm};
 use parity_wasm::elements::{
     FuncBody, FunctionType, Instruction, Instructions, Internal, Local, Module, ValueType,
 };
@@ -55,8 +55,10 @@ impl Superoptimizer {
 
                 let mut candidate_func = CandidateFunc::new(func_type, constants.clone());
                 let mut module = candidate_func.to_module();
-                let mut curr_cost = exec::eval_test_cases(module, &test_cases);
+                let mut curr_cost = exec::eval_test_cases(&module, &test_cases);
                 loop {
+                    debug::print_functions(&module);
+
                     if curr_cost == 0 {
                         match z3solver.verify(&candidate_func.to_func_body()) {
                             solver::VerifyResult::Verified => {
@@ -74,7 +76,7 @@ impl Superoptimizer {
                     let transform_info = transform.operate(rng, &mut candidate_func);
 
                     module = candidate_func.to_module();
-                    let new_cost = exec::eval_test_cases(module, &test_cases);
+                    let new_cost = exec::eval_test_cases(&module, &test_cases);
 
                     match self.algorithm {
                         Algorithm::Random => {
