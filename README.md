@@ -15,6 +15,25 @@
 ## Usage
 
 ```shell
+$> cargo run -- help
+
+USAGE:
+    rocinante <FILE> [algorithm] [SUBCOMMAND]
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+
+ARGS:
+    <FILE>         .wasm/.wat file to optimize
+    <algorithm>    Superoptimization algorithm to use. [values: Random, Stoke]
+```
+
+```shell
+$> cargo run -- ./examples/times-two/add.wat Stoke
+```
+
+```shell
 cargo run -- <FILE> print
 ```
 
