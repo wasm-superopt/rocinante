@@ -61,7 +61,7 @@ pub fn hamming_distance(output1: &Output, output2: &Output) -> u32 {
 
 pub type TestCases = Vec<(Input, Output)>;
 
-fn gen_random_input<R: Rng>(rng: &mut R, param_types: &[ValueType]) -> Input {
+fn gen_random_input<R: Rng + ?Sized>(rng: &mut R, param_types: &[ValueType]) -> Input {
     let mut inputs = Vec::with_capacity(param_types.len());
 
     for param_type in param_types {
@@ -81,7 +81,7 @@ fn gen_random_input<R: Rng>(rng: &mut R, param_types: &[ValueType]) -> Input {
     inputs
 }
 
-pub fn generate_test_cases<R: Rng>(
+pub fn generate_test_cases<R: Rng + ?Sized>(
     rng: &mut R,
     instance: &wasmi::ModuleInstance,
     func_name: &str,
@@ -109,15 +109,30 @@ pub fn invoke_with_inputs(func_ref: &FuncRef, inputs: &[Input]) -> Vec<Output> {
     outputs
 }
 
+// NOTE(taegyunkim): When a given WASM module isn't valid, wasmi crate panics when we
+// try to instantiate it via a call to wasmi::Module::from_parity_wasm_module(),
+// and outputs error message unnecessarily. This is to suppress that.
+// https://stackoverflow.com/a/59211505
+fn catch_unwind_silent<F: FnOnce() -> R + std::panic::UnwindSafe, R>(
+    f: F,
+) -> std::thread::Result<R> {
+    let prev_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
+    let result = std::panic::catch_unwind(f);
+    std::panic::set_hook(prev_hook);
+    result
+}
+
 // NOTE(taegyunkim): The return type of this function is unsigned instead of
 // signed because it represents the sum of hamming distances. When it overflows,
 // rust will panic.
 pub fn eval_test_cases(
-    module: parity_wasm::elements::Module,
+    module: &parity_wasm::elements::Module,
     test_cases: &[(Input, Output)],
 ) -> u32 {
     // The module is validated this step.
-    let result_or_err = std::panic::catch_unwind(|| wasmi::Module::from_parity_wasm_module(module));
+    let result_or_err =
+        catch_unwind_silent(|| wasmi::Module::from_parity_wasm_module(module.clone()));
     if result_or_err.is_err() {
         return 64 * test_cases.len() as u32;
     }

@@ -4,4 +4,5 @@
     get_local $p0
     get_local $p0
     i32.add)
-  (export "add" (func $add)))
+  (export "add" (func $add))
+)

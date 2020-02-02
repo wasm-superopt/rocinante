@@ -1,25 +1,29 @@
-use crate::{debug, exec, parity_wasm_utils, solver};
+use self::transform::*;
+use crate::{debug, exec, parity_wasm_utils, solver, Algorithm};
 use parity_wasm::elements::{
-    FuncBody, FunctionType, Instruction, Instructions, Internal, Module, ValueType,
+    FuncBody, FunctionType, Instruction, Instructions, Internal, Local, Module, ValueType,
 };
-use rand::distributions::{Distribution, Standard};
+use rand::distributions::{Bernoulli, Distribution};
 use rand::seq::SliceRandom;
 use rand::Rng;
 
-#[allow(dead_code)]
+pub mod transform;
+pub mod whitelist;
+
 pub struct Superoptimizer {
+    algorithm: Algorithm,
     module: Module,
 }
 
 impl Superoptimizer {
-    pub fn new(module: Module) -> Self {
-        Superoptimizer { module }
+    pub fn new(algorithm: Algorithm, module: Module) -> Self {
+        Superoptimizer { algorithm, module }
     }
 
     pub fn run(&self) {}
 
     /// Finds a module that has functions equivalent to the functions in the given module.
-    pub fn synthesize(&self, rng: &mut impl Rng) {
+    pub fn synthesize<R: Rng + ?Sized>(&self, rng: &mut R, constants: Vec<i32>) {
         // Module in wasmi, WASM interpreter. Instantiate this here and pass
         // down to exec module functions to avoid re-instantiation.
         let wasmi_module = wasmi::Module::from_parity_wasm_module(self.module.clone())
@@ -41,28 +45,58 @@ impl Superoptimizer {
                 let (func_type, func_body) =
                     parity_wasm_utils::func_by_name(&self.module, func_name);
 
+                // Check whether the spec contains only whitelisted instructions.
+                whitelist::validate(func_body.code().elements());
+
                 let cfg = z3::Config::new();
                 let ctx = z3::Context::new(&cfg);
                 let z3solver = solver::Z3Solver::new(&ctx, func_type, func_body);
-                let mut generator = Generator::new(func_type);
 
+                let mut candidate_func = CandidateFunc::new(func_type, constants.clone());
+                let mut module = candidate_func.to_module();
+                let mut curr_cost = exec::eval_test_cases(&module, &test_cases);
                 loop {
-                    // TODO(taegyunkim): Implement undo of a transformation.
-                    let module = generator.module();
                     debug::print_functions(&module);
-                    if exec::eval_test_cases(module.clone(), &test_cases) > 0 {
-                        generator.do_transform(rng);
-                        continue;
-                    }
-                    match z3solver.verify(generator.get_candidate_func()) {
-                        solver::VerifyResult::Verified => {
-                            println!("Verified.");
-                            // collect the function from generator
-                            break;
+
+                    if curr_cost == 0 {
+                        match z3solver.verify(&candidate_func.to_func_body()) {
+                            solver::VerifyResult::Verified => {
+                                println!("Verified.");
+                                break;
+                            }
+                            solver::VerifyResult::CounterExample(_) => {
+                                // TODO(taegyunkim): Add input, output pair to
+                                // the test casese.
+                            }
                         }
-                        solver::VerifyResult::CounterExample(_) => {
-                            // TODO(taegyunkim): Add input, output pair to the test cases.
-                            generator.do_transform(rng)
+                    }
+
+                    let transform = rng.gen::<Transform>();
+                    let transform_info = transform.operate(rng, &mut candidate_func);
+
+                    module = candidate_func.to_module();
+                    let new_cost = exec::eval_test_cases(&module, &test_cases);
+
+                    match self.algorithm {
+                        Algorithm::Random => {
+                            // Always accept transform.
+                            curr_cost = new_cost;
+                        }
+                        Algorithm::Stoke => {
+                            if new_cost < curr_cost {
+                                // Accept this transform.
+                                curr_cost = new_cost;
+                            } else {
+                                // Following computes min(1, exp(-1.0 * new_cost/ curr_cost))
+                                // TODO(taegyunkim): Use parameter \beta instead of -1.0
+                                let p: f64 = (1.0 as f64)
+                                    .min((-1.0 * (new_cost as f64) / (curr_cost as f64)).exp());
+                                let d = Bernoulli::new(p).unwrap();
+                                let accept = d.sample(rng);
+                                if !accept {
+                                    transform.undo(&transform_info, &mut candidate_func);
+                                }
+                            }
                         }
                     }
                 }
@@ -71,249 +105,38 @@ impl Superoptimizer {
     }
 }
 
-#[derive(Debug)]
-pub enum Transform {
-    Opcode,
-    Operand,
-    Swap,
-    Instruction,
-}
-
-impl Distribution<Transform> for Standard {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Transform {
-        match rng.gen_range(0, 4) {
-            0 => Transform::Opcode,
-            1 => Transform::Operand,
-            2 => Transform::Swap,
-            _ => Transform::Instruction,
-        }
-    }
-}
-
-// TODO(taegyunkim): Figure out a way to check all cases are covered whenever
-// this is used.
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub enum WhitelistedInstruction {
-    I32Add,
-    I32Sub,
-    I32Mul,
-    I32DivS,
-    I32DivU,
-    I32RemS,
-    I32RemU,
-    I32And,
-    I32Or,
-    I32Xor,
-    I32Shl,
-    I32ShrS,
-    I32ShrU,
-    I32Rotl,
-    I32Rotr,
-    I32Const(i32),
-    GetLocal(u32),
-    SetLocal(u32),
-    TeeLocal(u32),
-    End,
-    Nop,
-}
-
-impl WhitelistedInstruction {
-    pub fn sample<R: Rng + ?Sized>(
-        rng: &mut R,
-        param_types: &[ValueType],
-        // TODO: Support increasing the number of locals.
-        _local_types: &mut Vec<ValueType>,
-    ) -> WhitelistedInstruction {
-        match rng.gen_range(0, 21) {
-            0 => WhitelistedInstruction::I32Add,
-            1 => WhitelistedInstruction::I32Sub,
-            2 => WhitelistedInstruction::I32Mul,
-            3 => WhitelistedInstruction::I32DivS,
-            4 => WhitelistedInstruction::I32DivU,
-            5 => WhitelistedInstruction::I32RemS,
-            6 => WhitelistedInstruction::I32RemU,
-            7 => WhitelistedInstruction::I32And,
-            8 => WhitelistedInstruction::I32Or,
-            9 => WhitelistedInstruction::I32Xor,
-            10 => WhitelistedInstruction::I32Shl,
-            11 => WhitelistedInstruction::I32ShrS,
-            12 => WhitelistedInstruction::I32ShrU,
-            13 => WhitelistedInstruction::I32Rotl,
-            14 => WhitelistedInstruction::I32Rotr,
-            15 => {
-                let operands = vec![-2, -1, 0, 1, 2];
-                WhitelistedInstruction::I32Const(*operands.choose(rng).unwrap())
-            }
-            16 => {
-                let idx = rng.gen_range(0, param_types.len()) as u32;
-                WhitelistedInstruction::GetLocal(idx)
-            }
-            17 => {
-                let idx = rng.gen_range(0, param_types.len()) as u32;
-                WhitelistedInstruction::SetLocal(idx)
-            }
-            18 => {
-                let idx = rng.gen_range(0, param_types.len()) as u32;
-                WhitelistedInstruction::TeeLocal(idx)
-            }
-            19 => WhitelistedInstruction::End,
-            _ => WhitelistedInstruction::Nop,
-        }
-    }
-}
-
-impl std::fmt::Display for WhitelistedInstruction {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match *self {
-            WhitelistedInstruction::I32Add => write!(f, "i32.add"),
-            WhitelistedInstruction::I32Sub => write!(f, "i32.sub"),
-            WhitelistedInstruction::I32Mul => write!(f, "i32.mul"),
-            WhitelistedInstruction::I32DivS => write!(f, "i32.divs"),
-            WhitelistedInstruction::I32DivU => write!(f, "i32.divu"),
-            WhitelistedInstruction::I32RemS => write!(f, "i32.rems"),
-            WhitelistedInstruction::I32RemU => write!(f, "i32.remu"),
-            WhitelistedInstruction::I32And => write!(f, "i32.and"),
-            WhitelistedInstruction::I32Or => write!(f, "i32.or"),
-            WhitelistedInstruction::I32Xor => write!(f, "i32.xor"),
-            WhitelistedInstruction::I32Shl => write!(f, "i32.shl"),
-            WhitelistedInstruction::I32ShrS => write!(f, "i32.shrs"),
-            WhitelistedInstruction::I32ShrU => write!(f, "i32.shru"),
-            WhitelistedInstruction::I32Rotl => write!(f, "i32.rotl"),
-            WhitelistedInstruction::I32Rotr => write!(f, "i32.rotr"),
-            WhitelistedInstruction::I32Const(i) => write!(f, "i32.const {}", i),
-            WhitelistedInstruction::GetLocal(i) => write!(f, "get_local {}", i),
-            WhitelistedInstruction::SetLocal(i) => write!(f, "set_local {}", i),
-            WhitelistedInstruction::TeeLocal(i) => write!(f, "tee_local {}", i),
-            WhitelistedInstruction::End => write!(f, "end"),
-            WhitelistedInstruction::Nop => write!(f, "nop"),
-        }
-    }
-}
-
-impl From<Instruction> for WhitelistedInstruction {
-    fn from(instr: Instruction) -> Self {
-        match instr {
-            Instruction::I32Add => WhitelistedInstruction::I32Add,
-            Instruction::I32Sub => WhitelistedInstruction::I32Sub,
-            Instruction::I32Mul => WhitelistedInstruction::I32Mul,
-            Instruction::I32DivS => WhitelistedInstruction::I32DivS,
-            Instruction::I32DivU => WhitelistedInstruction::I32DivU,
-            Instruction::I32RemS => WhitelistedInstruction::I32RemS,
-            Instruction::I32RemU => WhitelistedInstruction::I32RemU,
-            Instruction::I32And => WhitelistedInstruction::I32And,
-            Instruction::I32Or => WhitelistedInstruction::I32Or,
-            Instruction::I32Xor => WhitelistedInstruction::I32Xor,
-            Instruction::I32Shl => WhitelistedInstruction::I32Shl,
-            Instruction::I32ShrS => WhitelistedInstruction::I32ShrS,
-            Instruction::I32ShrU => WhitelistedInstruction::I32ShrU,
-            Instruction::I32Rotl => WhitelistedInstruction::I32Rotl,
-            Instruction::I32Rotr => WhitelistedInstruction::I32Rotr,
-            Instruction::I32Const(i) => WhitelistedInstruction::I32Const(i),
-            Instruction::GetLocal(i) => WhitelistedInstruction::GetLocal(i),
-            Instruction::SetLocal(i) => WhitelistedInstruction::SetLocal(i),
-            Instruction::TeeLocal(i) => WhitelistedInstruction::TeeLocal(i),
-            Instruction::End => WhitelistedInstruction::End,
-            Instruction::Nop => WhitelistedInstruction::Nop,
-            _ => panic!("{} not implemented", instr),
-        }
-    }
-}
-
-impl Into<Instruction> for WhitelistedInstruction {
-    fn into(self) -> Instruction {
-        match self {
-            WhitelistedInstruction::I32Add => Instruction::I32Add,
-            WhitelistedInstruction::I32Sub => Instruction::I32Sub,
-            WhitelistedInstruction::I32Mul => Instruction::I32Mul,
-            WhitelistedInstruction::I32DivS => Instruction::I32DivS,
-            WhitelistedInstruction::I32DivU => Instruction::I32DivU,
-            WhitelistedInstruction::I32RemS => Instruction::I32RemS,
-            WhitelistedInstruction::I32RemU => Instruction::I32RemU,
-            WhitelistedInstruction::I32And => Instruction::I32And,
-            WhitelistedInstruction::I32Or => Instruction::I32Or,
-            WhitelistedInstruction::I32Xor => Instruction::I32Xor,
-            WhitelistedInstruction::I32Shl => Instruction::I32Shl,
-            WhitelistedInstruction::I32ShrS => Instruction::I32ShrS,
-            WhitelistedInstruction::I32ShrU => Instruction::I32ShrU,
-            WhitelistedInstruction::I32Rotl => Instruction::I32Rotl,
-            WhitelistedInstruction::I32Rotr => Instruction::I32Rotr,
-            WhitelistedInstruction::I32Const(i) => Instruction::I32Const(i),
-            WhitelistedInstruction::GetLocal(i) => Instruction::GetLocal(i),
-            WhitelistedInstruction::SetLocal(i) => Instruction::SetLocal(i),
-            WhitelistedInstruction::TeeLocal(i) => Instruction::TeeLocal(i),
-            WhitelistedInstruction::End => Instruction::End,
-            WhitelistedInstruction::Nop => Instruction::Nop,
-        }
-    }
-}
-
-const I32BINOP: [Instruction; 15] = [
-    Instruction::I32Add,
-    Instruction::I32Sub,
-    Instruction::I32Mul,
-    Instruction::I32DivS,
-    Instruction::I32DivU,
-    Instruction::I32RemS,
-    Instruction::I32RemU,
-    Instruction::I32And,
-    Instruction::I32Or,
-    Instruction::I32Xor,
-    Instruction::I32Shl,
-    Instruction::I32ShrS,
-    Instruction::I32ShrU,
-    Instruction::I32Rotl,
-    Instruction::I32Rotr,
-];
-
-const VAROP: [fn(n: u32) -> Instruction; 3] = [
-    Instruction::GetLocal,
-    Instruction::SetLocal,
-    Instruction::TeeLocal,
-    // Instruction::GetGlobal,
-    // Instruction::SetGlobal,
-];
-
-pub struct Generator {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CandidateFunc {
     func_type: FunctionType,
-    func_body: FuncBody,
     local_types: Vec<ValueType>,
+    instrs: Vec<Instruction>,
+    constants: Vec<i32>,
 }
 
-impl Generator {
-    pub fn new(func_type: &FunctionType) -> Self {
+impl CandidateFunc {
+    pub fn new(func_type: &FunctionType, constants: Vec<i32>) -> Self {
+        // TODO(taegyunkim): Generate a random program of length n.
         let instrs = vec![
             Instruction::GetLocal(0),
             Instruction::GetLocal(0),
             Instruction::I32Mul,
             Instruction::End,
         ];
-        let func_body = FuncBody::new(vec![], Instructions::new(instrs));
+
         Self {
             func_type: func_type.clone(),
-            func_body,
             local_types: Vec::new(),
+            instrs,
+            constants,
         }
     }
 
-    fn get_equiv<R: Rng + ?Sized>(&self, rng: &mut R, instr: &Instruction) -> Instruction {
-        // Make sure this instruction is whitelisted.
-        let _: WhitelistedInstruction = instr.clone().into();
-
-        match instr {
-            _ if I32BINOP.contains(instr) => I32BINOP.choose(rng).unwrap().clone(),
-            Instruction::GetLocal(i) | Instruction::SetLocal(i) | Instruction::TeeLocal(i) => {
-                (*VAROP.choose(rng).unwrap())(*i)
-            }
-            Instruction::I32Const(i) => Instruction::I32Const(*i),
-            Instruction::End => Instruction::End,
-            Instruction::Nop => Instruction::Nop,
-            _ => {
-                panic!("not implemented.");
-            }
-        }
+    pub fn get_rand_instr<R: Rng + ?Sized>(&self, rng: &mut R) -> (usize, Instruction) {
+        let indices = rand::seq::index::sample(rng, self.instrs.len(), 1);
+        (indices.index(0), self.instrs[indices.index(0)].clone())
     }
 
-    fn get_equiv_idx<R: Rng + ?Sized>(&self, rng: &mut R, i: u32) -> u32 {
+    pub fn get_equiv_local_idx<R: Rng + ?Sized>(&self, rng: &mut R, i: u32) -> u32 {
         let i = i as usize;
         let typ: &ValueType = if i < self.func_type.params().len() {
             &self.func_type.params()[i]
@@ -341,82 +164,33 @@ impl Generator {
         *equiv_indices.choose(rng).unwrap() as u32
     }
 
-    pub fn do_transform<R: Rng>(&mut self, rng: &mut R) {
-        let transform: Transform = rng.gen::<Transform>();
-        let instrs = self.func_body.code().elements();
-
-        let mut new_instrs = instrs.to_vec();
-
-        match transform {
-            Transform::Opcode => {
-                // Choose an instruction at random, and replace with a random,
-                // equivalent one.
-                let idx: usize = rng.gen_range(0, instrs.len());
-                let chosen_instr = &instrs[idx];
-                let new_instr = self.get_equiv(rng, chosen_instr);
-                new_instrs[idx] = new_instr;
-            }
-            Transform::Operand => {
-                // Select an instruction at random, and its operand is replaced by a
-                // random operand drawn from an equivalence class of operands.
-                let idx: usize = rng.gen_range(0, instrs.len());
-                let chosen_instr = &instrs[idx];
-
-                let new_instr = match chosen_instr {
-                    Instruction::GetLocal(i) => Instruction::GetLocal(self.get_equiv_idx(rng, *i)),
-                    Instruction::SetLocal(i) => Instruction::SetLocal(self.get_equiv_idx(rng, *i)),
-                    Instruction::TeeLocal(i) => Instruction::SetLocal(self.get_equiv_idx(rng, *i)),
-                    _ if I32BINOP.contains(chosen_instr) => chosen_instr.clone(),
-                    Instruction::End => Instruction::End,
-                    Instruction::Nop => Instruction::Nop,
-                    Instruction::I32Const(_) => {
-                        let operands = vec![-2, -1, 0, 1, 2];
-                        Instruction::I32Const(*operands.choose(rng).unwrap())
-                    }
-                    _ => {
-                        panic!("Not implemented");
-                    }
-                };
-                new_instrs[idx] = new_instr;
-            }
-            Transform::Swap => {
-                // Select two instructions from the set of original instructions
-                // union with Nop, and swap
-                let idx1 = rng.gen_range(0, instrs.len() + 1);
-                let idx2 = rng.gen_range(0, instrs.len() + 1);
-                if idx1 < instrs.len() && idx2 < instrs.len() {
-                    new_instrs[idx1] = instrs[idx2].clone();
-                    new_instrs[idx2] = instrs[idx1].clone();
-                } else if idx1 < instrs.len() && idx2 >= instrs.len() {
-                    new_instrs[idx1] = Instruction::Nop;
-                } else if idx1 >= instrs.len() && idx2 < instrs.len() {
-                    new_instrs[idx2] = Instruction::Nop;
-                } else {
-                    // Do nothing
-                }
-            }
-            Transform::Instruction => {
-                let idx = rng.gen_range(0, instrs.len());
-                let new_instr = WhitelistedInstruction::sample(
-                    rng,
-                    self.func_type.params(),
-                    &mut self.local_types,
-                );
-                new_instrs[idx] = new_instr.into();
-            }
-        }
-
-        self.func_body
-            .code_mut()
-            .elements_mut()
-            .clone_from(&new_instrs);
+    pub fn sample_local_idx<R: Rng + ?Sized>(&self, rng: &mut R) -> u32 {
+        rng.gen_range(0, self.func_type.params().len() + self.local_types.len()) as u32
     }
 
-    pub fn module(&self) -> Module {
-        parity_wasm_utils::build_module("candidate", &self.func_type, self.func_body.clone())
+    pub fn sample_i32<R: Rng + ?Sized>(&self, rng: &mut R) -> i32 {
+        *self.constants.choose(rng).unwrap()
     }
 
-    pub fn get_candidate_func(&self) -> &FuncBody {
-        &self.func_body
+    pub fn instrs(&self) -> &[Instruction] {
+        &self.instrs
+    }
+
+    pub fn instrs_mut(&mut self) -> &mut Vec<Instruction> {
+        &mut self.instrs
+    }
+
+    pub fn to_func_body(&self) -> FuncBody {
+        let locals: Vec<Local> = self
+            .local_types
+            .iter()
+            .map(|typ| Local::new(1, *typ))
+            .collect();
+
+        FuncBody::new(locals, Instructions::new(self.instrs.clone()))
+    }
+
+    pub fn to_module(&self) -> Module {
+        parity_wasm_utils::build_module("candidate", &self.func_type, self.to_func_body())
     }
 }

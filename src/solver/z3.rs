@@ -28,8 +28,8 @@ impl<'ctx> ValueStack<'ctx> {
     where
         <T as TryFrom<z3::ast::Dynamic<'ctx>>>::Error: Debug,
     {
-        let lhs = self.pop_as::<T>();
         let rhs = self.pop_as::<T>();
+        let lhs = self.pop_as::<T>();
 
         (lhs, rhs)
     }
@@ -321,6 +321,38 @@ mod tests {
         );
         let (candidate_func_type, candidate_func_body) =
             parity_wasm_utils::func_by_name(&candidate_module, "mul");
+        assert_eq!(spec_func_type, candidate_func_type);
+
+        let cfg = z3::Config::new();
+        let ctx = z3::Context::new(&cfg);
+
+        let solver = Z3Solver::new(&ctx, spec_func_type, spec_func_body);
+        assert_eq!(solver.verify(candidate_func_body), VerifyResult::Verified);
+    }
+
+    #[test]
+    fn verify_shl_test() {
+        let spec_module: parity_wasm::elements::Module = wat2module(
+            r#"(module
+                (type $t0 (func (param i32) (result i32)))
+                (func $add (type $t0) (param $p0 i32) (result i32)
+                  get_local $p0
+                  get_local $p0
+                  i32.add)
+                (export "add" (func $add)))"#,
+        );
+        let (spec_func_type, spec_func_body) = parity_wasm_utils::func_by_name(&spec_module, "add");
+        let candidate_module: parity_wasm::elements::Module = wat2module(
+            r#"(module
+                (type $t0 (func (param i32) (result i32)))
+                (func $shl (type $t0) (param $p0 i32) (result i32)
+                  get_local $p0
+                  i32.const 1
+                  i32.shl)
+                (export "shl" (func $shl)))"#,
+        );
+        let (candidate_func_type, candidate_func_body) =
+            parity_wasm_utils::func_by_name(&candidate_module, "shl");
         assert_eq!(spec_func_type, candidate_func_type);
 
         let cfg = z3::Config::new();
