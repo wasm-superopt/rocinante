@@ -111,7 +111,7 @@ pub fn invoke_with_inputs(func_ref: &FuncRef, inputs: &[Input]) -> Vec<Output> {
 
 // NOTE(taegyunkim): When a given WASM module isn't valid, wasmi crate panics when we
 // try to instantiate it via a call to wasmi::Module::from_parity_wasm_module(),
-// and outputs error message unnecessarily. This is to supprses that.
+// and outputs error message unnecessarily. This is to suppress that.
 // https://stackoverflow.com/a/59211505
 fn catch_unwind_silent<F: FnOnce() -> R + std::panic::UnwindSafe, R>(
     f: F,
