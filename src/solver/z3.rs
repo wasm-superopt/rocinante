@@ -298,6 +298,7 @@ mod tests {
         parity_wasm::elements::Module::from_bytes(binary).expect("Failed to deserialize.")
     }
 
+    // Verifies that x + x == 2 * x.
     #[test]
     fn verify_test() {
         let spec_module: parity_wasm::elements::Module = wat2module(
@@ -330,6 +331,7 @@ mod tests {
         assert_eq!(solver.verify(candidate_func_body), VerifyResult::Verified);
     }
 
+    // Verifies that x + x == x << 1.
     #[test]
     fn verify_shl_test() {
         let spec_module: parity_wasm::elements::Module = wat2module(
@@ -362,6 +364,9 @@ mod tests {
         assert_eq!(solver.verify(candidate_func_body), VerifyResult::Verified);
     }
 
+    // Checks that x + x != x * 3 and generates a counterexample. Then, using
+    // wasmi, WASM interpreter, the generated counterexample indeed results in
+    // different values when applied to two functions.
     #[test]
     fn counterexample_test() {
         let spec_module: parity_wasm::elements::Module = wat2module(
