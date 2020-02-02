@@ -57,7 +57,8 @@ fn main() {
             Arg::with_name("algorithm")
                 .help("Superoptimization algorithm to use.")
                 .possible_value("Random")
-                .possible_value("Stoke"),
+                .possible_value("Stoke")
+                .default_value("Stoke"),
         )
         .subcommand(
             SubCommand::with_name("print").about("Prints all functions in the given module."),
@@ -85,11 +86,12 @@ fn main() {
     // Deserialize into an IR using parity-wasm.
     let module = Module::from_bytes(&binary).expect("Failed to deserialize.");
 
+    // TODO(taegyunkim): Get this from commandline.
     let constants = vec![-2, -1, 0, 1, 2];
     if let Some(_matches) = matches.subcommand_matches("print") {
         debug::print_functions(&module);
     } else {
-        let algorithm = matches.value_of("algorithm").unwrap_or("Stoke");
+        let algorithm = matches.value_of("algorithm").unwrap();
         // TODO(taegyunkim): Propagate the template function.
         debug::print_functions(&module);
         let optimizer = stoke::Superoptimizer::new(Algorithm::from_str(algorithm).unwrap(), module);

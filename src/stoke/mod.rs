@@ -10,7 +10,6 @@ use rand::Rng;
 pub mod transform;
 pub mod whitelist;
 
-#[allow(dead_code)]
 pub struct Superoptimizer {
     algorithm: Algorithm,
     module: Module,

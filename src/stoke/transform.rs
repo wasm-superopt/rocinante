@@ -27,7 +27,6 @@ impl Distribution<TransformKind> for Standard {
 pub struct TransformInfo {
     #[allow(dead_code)]
     success: bool,
-    #[allow(dead_code)]
     kind: TransformKind,
     undo_indices: [usize; 2],
     undo_instr: Instruction,
