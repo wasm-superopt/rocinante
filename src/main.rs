@@ -8,6 +8,7 @@ extern crate strum;
 extern crate wabt;
 extern crate wasmi;
 extern crate wasmparser;
+extern crate wast;
 extern crate wat;
 #[macro_use]
 extern crate strum_macros;
@@ -42,6 +43,22 @@ fn read_wasm(file: &str) -> io::Result<Vec<u8>> {
     Ok(data)
 }
 
+fn parse_module_from_wast(file: &str) -> Vec<Vec<u8>> {
+    let contents = std::fs::read_to_string(file).unwrap();
+    let buf = wast::parser::ParseBuffer::new(&contents).unwrap();
+    let wast = wast::parser::parse::<wast::Wast>(&buf).unwrap();
+
+    let mut modules: Vec<Vec<u8>> = Vec::new();
+    for directive in wast.directives {
+        // NOTE(taegyunkim): Other directives can have modules in them, but
+        // we're ingorning them for now.
+        if let wast::WastDirective::Module(mut module) = directive {
+            modules.push(module.encode().unwrap());
+        }
+    }
+    modules
+}
+
 fn main() {
     let matches = App::new("Rocinante")
         .author(env!("CARGO_PKG_AUTHORS"))
@@ -70,32 +87,34 @@ fn main() {
     let ext = Path::new(input).extension().unwrap().to_str().unwrap();
 
     // Read the input file into binary format.
-    // TODO: Consider supporting wast. wast is a superset of wat that is
-    // intended for writing test  scripts, and can contain assertions and other
-    // commands.
-    let binary: Vec<u8> = match ext {
-        "wasm" => read_wasm(input).unwrap(),
-        "wat" => wat::parse_file(input).unwrap(),
-        "wast" | _ => panic!("{}: unrecognized file type", input),
+    let binaries: Vec<Vec<u8>> = match ext {
+        "wasm" => vec![read_wasm(input).unwrap()],
+        "wat" => vec![wat::parse_file(input).unwrap()],
+        "wast" => parse_module_from_wast(input),
+        _ => panic!("{}: unrecognized file type", input),
     };
 
-    // Validate raw binary.
-    wasmparser::validate(&binary, None /* Uses default parser config */)
-        .expect("Failed to validate.");
+    // TODO(taegyunkim): Parallel processing of different binaries.
+    for binary in binaries {
+        // Validate raw binary.
+        wasmparser::validate(&binary, None /* Uses default parser config */)
+            .expect("Failed to validate.");
 
-    // Deserialize into an IR using parity-wasm.
-    let module = Module::from_bytes(&binary).expect("Failed to deserialize.");
+        // Deserialize into an IR using parity-wasm.
+        let module = Module::from_bytes(&binary).expect("Failed to deserialize.");
 
-    // TODO(taegyunkim): Get this from commandline.
-    let constants = vec![-2, -1, 0, 1, 2];
-    if let Some(_matches) = matches.subcommand_matches("print") {
-        debug::print_functions(&module);
-    } else {
-        let algorithm = matches.value_of("algorithm").unwrap();
-        // TODO(taegyunkim): Propagate the template function.
-        debug::print_functions(&module);
-        let optimizer = stoke::Superoptimizer::new(Algorithm::from_str(algorithm).unwrap(), module);
-        let mut rng = rand::thread_rng();
-        optimizer.synthesize(&mut rng, constants);
+        // TODO(taegyunkim): Get this from commandline.
+        let constants = vec![-2, -1, 0, 1, 2];
+        if let Some(_matches) = matches.subcommand_matches("print") {
+            debug::print_functions(&module);
+        } else {
+            let algorithm = matches.value_of("algorithm").unwrap();
+            // TODO(taegyunkim): Propagate the template function.
+            debug::print_functions(&module);
+            let optimizer =
+                stoke::Superoptimizer::new(Algorithm::from_str(algorithm).unwrap(), module);
+            let mut rng = rand::thread_rng();
+            optimizer.synthesize(&mut rng, constants);
+        }
     }
 }

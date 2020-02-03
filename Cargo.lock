@@ -317,6 +317,7 @@ dependencies = [
  "wasmi 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasmparser 0.42.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasmprinter 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wast 5.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "wat 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "z3 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]

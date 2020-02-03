@@ -23,6 +23,7 @@ strum_macros = "*"
 wabt = "*"
 wasmi = "*"
 wasmparser = "*"
+wast = "*"
 wat = "*"
 z3 = "*"
 
