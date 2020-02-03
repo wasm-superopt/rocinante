@@ -95,6 +95,8 @@ impl Superoptimizer {
                                 let accept = d.sample(rng);
                                 if !accept {
                                     transform.undo(&transform_info, &mut candidate_func);
+                                } else {
+                                    curr_cost = new_cost;
                                 }
                             }
                         }
