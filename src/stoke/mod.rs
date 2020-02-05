@@ -44,6 +44,7 @@ impl Superoptimizer {
                 let test_cases = exec::generate_test_cases(rng, &instance, func_name);
                 let (func_type, func_body) =
                     parity_wasm_utils::func_by_name(&self.module, func_name);
+                let return_type = func_type.return_type();
 
                 // Check whether the spec contains only whitelisted instructions.
                 whitelist::validate(func_body.code().elements());
@@ -58,7 +59,7 @@ impl Superoptimizer {
                     constants.clone(),
                 );
                 let mut module = candidate_func.to_module();
-                let mut curr_cost = exec::eval_test_cases(&module, &test_cases);
+                let mut curr_cost = exec::eval_test_cases(&module, return_type, &test_cases);
                 loop {
                     debug::print_functions(&module);
 
@@ -79,8 +80,9 @@ impl Superoptimizer {
                     let transform_info = transform.operate(rng, &mut candidate_func);
 
                     module = candidate_func.to_module();
-                    let new_cost = exec::eval_test_cases(&module, &test_cases);
+                    let new_cost = exec::eval_test_cases(&module, return_type, &test_cases);
 
+                    println!("curr_cost: {}, new_cost: {}", curr_cost, new_cost);
                     match self.algorithm {
                         Algorithm::Random => {
                             // Always accept transform.
@@ -96,10 +98,13 @@ impl Superoptimizer {
                                 let p: f64 = (1.0 as f64)
                                     .min((-1.0 * (new_cost as f64) / (curr_cost as f64)).exp());
                                 let d = Bernoulli::new(p).unwrap();
+                                println!("p: {}", p);
                                 let accept = d.sample(rng);
                                 if !accept {
+                                    println!("undoing...");
                                     transform.undo(&transform_info, &mut candidate_func);
                                 } else {
+                                    println!("accepted...");
                                     curr_cost = new_cost;
                                 }
                             }

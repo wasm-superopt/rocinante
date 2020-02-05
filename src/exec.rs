@@ -4,7 +4,7 @@ use wasmi::{
     nan_preserving_float, FuncInstance, FuncRef, NopExternals, RuntimeValue, Trap, ValueType,
 };
 
-const NUM_TEST_CASES: usize = 10;
+const NUM_TEST_CASES: usize = 16;
 
 pub type Input = Vec<RuntimeValue>;
 
@@ -128,24 +128,34 @@ fn catch_unwind_silent<F: FnOnce() -> R + std::panic::UnwindSafe, R>(
 // rust will panic.
 pub fn eval_test_cases(
     module: &parity_wasm::elements::Module,
+    return_type: Option<parity_wasm::elements::ValueType>,
     test_cases: &[(Input, Output)],
 ) -> u32 {
     // The module is validated this step.
+    let return_type_bits = match return_type {
+        None => {
+            panic!("void function not supported.");
+        }
+        Some(parity_wasm::elements::ValueType::I32) => 32,
+        Some(parity_wasm::elements::ValueType::I64) => 64,
+        unexpected => panic!("{:?} return type not supported.", unexpected),
+    };
+
     let result_or_err =
         catch_unwind_silent(|| wasmi::Module::from_parity_wasm_module(module.clone()));
     if result_or_err.is_err() {
-        return 64 * test_cases.len() as u32;
+        return return_type_bits * test_cases.len() as u32;
     }
 
     let module_or_err = result_or_err.unwrap();
 
     if module_or_err.is_err() {
-        return 64 * test_cases.len() as u32;
+        return return_type_bits * test_cases.len() as u32;
     }
     let module = module_or_err.unwrap();
     let instance_or_err = wasmi::ModuleInstance::new(&module, &wasmi::ImportsBuilder::default());
     if instance_or_err.is_err() {
-        return 64 * test_cases.len() as u32;
+        return return_type_bits * test_cases.len() as u32;
     }
     let instance = instance_or_err.unwrap().assert_no_start();
     let candidate_func = wasmi_utils::func_by_name(&instance, "candidate").unwrap();
