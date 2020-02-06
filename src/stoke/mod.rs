@@ -61,6 +61,9 @@ impl Superoptimizer {
                 let mut module = candidate_func.to_module();
                 let mut curr_cost = exec::eval_test_cases(&module, return_type, &test_cases);
                 loop {
+                    #[cfg(debug_assertions)]
+                    debug::print_functions(&module);
+
                     if curr_cost == 0 {
                         match z3solver.verify(&candidate_func.to_func_body()) {
                             solver::VerifyResult::Verified => {
@@ -81,7 +84,8 @@ impl Superoptimizer {
                     module = candidate_func.to_module();
                     let new_cost = exec::eval_test_cases(&module, return_type, &test_cases);
 
-                    // println!("curr_cost: {}, new_cost: {}", curr_cost, new_cost);
+                    #[cfg(debug_assertions)]
+                    println!("curr_cost: {}, new_cost: {}", curr_cost, new_cost);
                     match self.algorithm {
                         Algorithm::Random => {
                             // Always accept transform.
@@ -97,13 +101,16 @@ impl Superoptimizer {
                                 let p: f64 = (1.0 as f64)
                                     .min((-1.0 * (new_cost as f64) / (curr_cost as f64)).exp());
                                 let d = Bernoulli::new(p).unwrap();
-                                // println!("p: {}", p);
+                                #[cfg(debug_assertions)]
+                                println!("p: {}", p);
                                 let accept = d.sample(rng);
                                 if !accept {
-                                    // println!("undoing...");
+                                    #[cfg(debug_assertions)]
+                                    println!("undoing...");
                                     transform.undo(&transform_info, &mut candidate_func);
                                 } else {
-                                    // println!("accepted...");
+                                    #[cfg(debug_assertions)]
+                                    println!("accepted...");
                                     curr_cost = new_cost;
                                 }
                             }
