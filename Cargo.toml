@@ -29,10 +29,12 @@ z3 = "*"
 
 [dev-dependencies]
 anyhow = "*"
+bus = "*"
 env_logger = "*"
 getopts = "*"
 log = "*"
 matches = "*"
+num_cpus = "*"
 wasmprinter = "*"
 
 [dev-dependencies.cargo-husky]
