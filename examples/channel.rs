@@ -26,7 +26,7 @@ fn main() {
 
     // A buffered channel to receive computation results from workers.
     let (res_sender, res_receiver) = sync_channel(num_workers);
-    // A broadcast channel to
+    // A broadcast channel to terminate workers.
     let mut bus = bus::Bus::new(num_workers);
 
     let mut rng = thread_rng();
@@ -60,8 +60,8 @@ fn main() {
             println!("Worker {} terminated by broadcast.", i);
         }
         if !wait_for_all && completed {
-            // NOTE(taegyunkim):: Not sure what would happen if this broadcast is called multiple
-            // times.
+            // NOTE(taegyunkim): Not sure what would happen if this broadcast is called multiple
+            // times. It seems to be ok for above simple example.
             bus.broadcast(());
         }
     }
