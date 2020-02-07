@@ -30,12 +30,19 @@ z3 = "*"
 [dev-dependencies]
 anyhow = "*"
 bus = "*"
+criterion = "*"
 env_logger = "*"
 getopts = "*"
 log = "*"
 matches = "*"
 num_cpus = "*"
+wasmer-runtime = "*"
 wasmprinter = "*"
+wasmtime = "*"
+
+[[bench]]
+name = "runtime"
+harness = false
 
 [dev-dependencies.cargo-husky]
 version = "1"
