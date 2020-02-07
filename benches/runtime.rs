@@ -51,24 +51,33 @@ fn wasmer_invoke(binary: &[u8], func_name: &str, inputs: &[i32]) {
 fn bench_invoke(c: &mut Criterion) {
     let mut group = c.benchmark_group("Invoke");
 
-    let binary: Vec<u8> = wat::parse_file("./examples/hackers_delight/p1.wat").unwrap();
-    let mut rng = thread_rng();
-    for size in [4, 8, 16, 32, 64].iter() {
-        let size = *size as usize;
-        let mut inputs = Vec::with_capacity(size);
-        for _ in 0..size {
-            inputs.push(rng.gen::<i32>());
-        }
+    let files = ["p1", "p2", "p3", "p4", "p5", "p6"];
 
-        group.bench_with_input(BenchmarkId::new("wasmtime", size), &inputs, |b, i| {
-            b.iter(|| wasmtime_invoke(&binary, "p1", i))
-        });
-        group.bench_with_input(BenchmarkId::new("wasmi", size), &inputs, |b, i| {
-            b.iter(|| wasmi_invoke(&binary, "p1", i))
-        });
-        group.bench_with_input(BenchmarkId::new("wasmer", size), &inputs, |b, i| {
-            b.iter(|| wasmer_invoke(&binary, "p1", i))
-        });
+    for file in files.iter() {
+        let binary: Vec<u8> =
+            wat::parse_file(["./examples/hackers_delight/", file, ".wat"].concat()).unwrap();
+        let mut rng = thread_rng();
+        for size in [4, 8, 16, 32, 64].iter() {
+            let size = *size as usize;
+            let mut inputs = Vec::with_capacity(size);
+            for _ in 0..size {
+                inputs.push(rng.gen::<i32>());
+            }
+
+            let bench_name = format!("{}/{}", file, size);
+
+            group.bench_with_input(
+                BenchmarkId::new("wasmtime", &bench_name),
+                &inputs,
+                |b, i| b.iter(|| wasmtime_invoke(&binary, file, i)),
+            );
+            group.bench_with_input(BenchmarkId::new("wasmi", &bench_name), &inputs, |b, i| {
+                b.iter(|| wasmi_invoke(&binary, file, i))
+            });
+            group.bench_with_input(BenchmarkId::new("wasmer", &bench_name), &inputs, |b, i| {
+                b.iter(|| wasmer_invoke(&binary, file, i))
+            });
+        }
     }
 }
 
