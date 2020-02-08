@@ -1,4 +1,4 @@
-use super::NUM_TEST_CASES;
+use super::*;
 use rand::Rng;
 use wasmer_runtime::*;
 
@@ -7,6 +7,13 @@ pub type Input = Vec<Value>;
 pub type Output = Result<Vec<Value>, error::CallError>;
 
 pub type TestCases = Vec<(Input, Output)>;
+
+pub struct Wasmer {
+    #[allow(dead_code)]
+    kind: InterpreterKind,
+    #[allow(dead_code)]
+    test_cases: TestCases,
+}
 
 fn hamming_distance(output1: &Output, output2: &Output) -> u32 {
     let mut dist = 0;
