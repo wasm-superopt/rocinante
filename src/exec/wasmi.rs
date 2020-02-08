@@ -2,7 +2,8 @@ use super::NUM_TEST_CASES;
 use crate::wasmi_utils;
 use rand::Rng;
 use wasmi::{
-    nan_preserving_float, FuncInstance, FuncRef, NopExternals, RuntimeValue, Trap, ValueType,
+    nan_preserving_float, FuncInstance, FuncRef, ImportsBuilder, Module, ModuleInstance,
+    NopExternals, RuntimeValue, Trap, ValueType,
 };
 
 pub type Input = Vec<RuntimeValue>;
@@ -82,10 +83,15 @@ fn gen_random_input<R: Rng + ?Sized>(rng: &mut R, param_types: &[ValueType]) -> 
 
 pub fn generate_test_cases<R: Rng + ?Sized>(
     rng: &mut R,
-    instance: &wasmi::ModuleInstance,
+    wasm: &[u8],
     func_name: &str,
 ) -> TestCases {
-    let func_ref = wasmi_utils::func_by_name(instance, func_name)
+    let module = Module::from_buffer(&wasm).unwrap();
+    let instance = ModuleInstance::new(&module, &ImportsBuilder::default())
+        .unwrap()
+        .assert_no_start();
+
+    let func_ref = wasmi_utils::func_by_name(&instance, func_name)
         .unwrap_or_else(|_| panic!("Module doesn't have function named {}", func_name));
     let signature = func_ref.signature();
 
@@ -108,38 +114,11 @@ fn invoke_with_inputs(func_ref: &FuncRef, inputs: &[Input]) -> Vec<Output> {
     outputs
 }
 
-// NOTE(taegyunkim): When a given WASM module isn't valid, wasmi crate panics when we
-// try to instantiate it via a call to wasmi::Module::from_parity_wasm_module(),
-// and outputs error message unnecessarily. This is to suppress that.
-// https://stackoverflow.com/a/59211505
-fn catch_unwind_silent<F: FnOnce() -> R + std::panic::UnwindSafe, R>(
-    f: F,
-) -> std::thread::Result<R> {
-    let prev_hook = std::panic::take_hook();
-    std::panic::set_hook(Box::new(|_| {}));
-    let result = std::panic::catch_unwind(f);
-    std::panic::set_hook(prev_hook);
-    result
-}
-
 // NOTE(taegyunkim): The return type of this function is unsigned instead of
 // signed because it represents the sum of hamming distances. When it overflows,
 // rust will panic.
-pub fn eval_test_cases(
-    module: &parity_wasm::elements::Module,
-    test_cases: &[(Input, Output)],
-) -> u32 {
-    // The module is validated this step.
-    let result_or_err =
-        catch_unwind_silent(|| wasmi::Module::from_parity_wasm_module(module.clone()));
-    if result_or_err.is_err() {
-        #[cfg(debug_assertions)]
-        println!("Failed to convert to wasmi module.");
-        return 32 * test_cases.len() as u32;
-    }
-
-    let module_or_err = result_or_err.unwrap();
-
+pub fn eval_test_cases(wasm: &[u8], test_cases: &[(Input, Output)]) -> u32 {
+    let module_or_err = Module::from_buffer(wasm);
     if module_or_err.is_err() {
         #[cfg(debug_assertions)]
         println!("Failed to convert to wasmi module.");

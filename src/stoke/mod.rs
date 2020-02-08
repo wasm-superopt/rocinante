@@ -24,14 +24,6 @@ impl Superoptimizer {
 
     /// Finds a module that has functions equivalent to the functions in the given module.
     pub fn synthesize<R: Rng + ?Sized>(&self, rng: &mut R, constants: Vec<i32>) {
-        // Module in wasmi, WASM interpreter. Instantiate this here and pass
-        // down to exec module functions to avoid re-instantiation.
-        let wasmi_module = wasmi::Module::from_parity_wasm_module(self.module.clone())
-            .expect("Failed to load parity-wasm Module.");
-        let instance = wasmi::ModuleInstance::new(&wasmi_module, &wasmi::ImportsBuilder::default())
-            .expect("Failed to instantiate wasm module.")
-            .assert_no_start();
-
         let export_section = self
             .module
             .export_section()
@@ -41,7 +33,11 @@ impl Superoptimizer {
             if let Internal::Function(_idx) = export_entry.internal() {
                 let func_name = export_entry.field();
 
-                let test_cases = exec::wasmi::generate_test_cases(rng, &instance, func_name);
+                let test_cases = exec::wasmi::generate_test_cases(
+                    rng,
+                    &self.module.clone().to_bytes().unwrap(),
+                    func_name,
+                );
                 let (func_type, func_body) =
                     parity_wasm_utils::func_by_name(&self.module, func_name);
 
@@ -58,7 +54,8 @@ impl Superoptimizer {
                     constants.clone(),
                 );
                 let mut module = candidate_func.to_module();
-                let mut curr_cost = exec::wasmi::eval_test_cases(&module, &test_cases);
+                let mut curr_cost =
+                    exec::wasmi::eval_test_cases(&module.clone().to_bytes().unwrap(), &test_cases);
                 loop {
                     #[cfg(debug_assertions)]
                     debug::print_functions(&module);
@@ -81,7 +78,10 @@ impl Superoptimizer {
                     let transform_info = transform.operate(rng, &mut candidate_func);
 
                     module = candidate_func.to_module();
-                    let new_cost = exec::wasmi::eval_test_cases(&module, &test_cases);
+                    let new_cost = exec::wasmi::eval_test_cases(
+                        &module.clone().to_bytes().unwrap(),
+                        &test_cases,
+                    );
 
                     #[cfg(debug_assertions)]
                     println!("curr_cost: {}, new_cost: {}", curr_cost, new_cost);
