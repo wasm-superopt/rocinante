@@ -52,7 +52,11 @@ impl Superoptimizer {
                 let ctx = z3::Context::new(&cfg);
                 let z3solver = solver::Z3Solver::new(&ctx, func_type, func_body);
 
-                let mut candidate_func = CandidateFunc::new(func_type, constants.clone());
+                let mut candidate_func = CandidateFunc::new(
+                    func_type,
+                    func_body.code().elements().len(),
+                    constants.clone(),
+                );
                 let mut module = candidate_func.to_module();
                 let mut curr_cost = exec::eval_test_cases(&module, &test_cases);
                 loop {
@@ -116,19 +120,11 @@ pub struct CandidateFunc {
 }
 
 impl CandidateFunc {
-    pub fn new(func_type: &FunctionType, constants: Vec<i32>) -> Self {
-        // TODO(taegyunkim): Generate a random program of length n.
-        let instrs = vec![
-            Instruction::GetLocal(0),
-            Instruction::GetLocal(0),
-            Instruction::I32Mul,
-            Instruction::End,
-        ];
-
+    pub fn new(func_type: &FunctionType, len: usize, constants: Vec<i32>) -> Self {
         Self {
             func_type: func_type.clone(),
             local_types: Vec::new(),
-            instrs,
+            instrs: vec![Instruction::Nop; len],
             constants,
         }
     }
