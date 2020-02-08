@@ -1,4 +1,5 @@
 use self::transform::*;
+use crate::exec::Interpreter;
 use crate::{debug, exec, parity_wasm_utils, solver, Algorithm};
 use parity_wasm::elements::{
     FuncBody, FunctionType, Instruction, Instructions, Internal, Local, Module, ValueType,
@@ -33,11 +34,10 @@ impl Superoptimizer {
             if let Internal::Function(_idx) = export_entry.internal() {
                 let func_name = export_entry.field();
 
-                let test_cases = exec::wasmer::generate_test_cases(
-                    rng,
-                    &self.module.clone().to_bytes().unwrap(),
-                    func_name,
-                );
+                let mut interpreter = exec::wasmi::Wasmi::new();
+                interpreter
+                    .generate_test_cases(&self.module.clone().to_bytes().unwrap(), func_name);
+
                 let (func_type, func_body) =
                     parity_wasm_utils::func_by_name(&self.module, func_name);
 
@@ -55,7 +55,7 @@ impl Superoptimizer {
                 );
                 let mut module = candidate_func.to_module();
                 let mut curr_cost =
-                    exec::wasmer::eval_test_cases(&module.clone().to_bytes().unwrap(), &test_cases);
+                    interpreter.eval_test_cases(&module.clone().to_bytes().unwrap());
                 loop {
                     #[cfg(debug_assertions)]
                     debug::print_functions(&module);
@@ -78,10 +78,7 @@ impl Superoptimizer {
                     let transform_info = transform.operate(rng, &mut candidate_func);
 
                     module = candidate_func.to_module();
-                    let new_cost = exec::wasmer::eval_test_cases(
-                        &module.clone().to_bytes().unwrap(),
-                        &test_cases,
-                    );
+                    let new_cost = interpreter.eval_test_cases(&module.clone().to_bytes().unwrap());
 
                     #[cfg(debug_assertions)]
                     println!("curr_cost: {}, new_cost: {}", curr_cost, new_cost);

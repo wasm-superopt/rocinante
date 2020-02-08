@@ -10,8 +10,6 @@ pub type TestCases = Vec<(Input, Output)>;
 
 pub struct Wasmer {
     #[allow(dead_code)]
-    kind: InterpreterKind,
-    #[allow(dead_code)]
     test_cases: TestCases,
 }
 
