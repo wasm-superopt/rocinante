@@ -44,7 +44,6 @@ impl Superoptimizer {
                 let test_cases = exec::generate_test_cases(rng, &instance, func_name);
                 let (func_type, func_body) =
                     parity_wasm_utils::func_by_name(&self.module, func_name);
-                let return_type = func_type.return_type();
 
                 // Check whether the spec contains only whitelisted instructions.
                 whitelist::validate(func_body.code().elements());
@@ -59,7 +58,7 @@ impl Superoptimizer {
                     constants.clone(),
                 );
                 let mut module = candidate_func.to_module();
-                let mut curr_cost = exec::eval_test_cases(&module, return_type, &test_cases);
+                let mut curr_cost = exec::eval_test_cases(&module, &test_cases);
                 loop {
                     #[cfg(debug_assertions)]
                     debug::print_functions(&module);
@@ -82,7 +81,7 @@ impl Superoptimizer {
                     let transform_info = transform.operate(rng, &mut candidate_func);
 
                     module = candidate_func.to_module();
-                    let new_cost = exec::eval_test_cases(&module, return_type, &test_cases);
+                    let new_cost = exec::eval_test_cases(&module, &test_cases);
 
                     #[cfg(debug_assertions)]
                     println!("curr_cost: {}, new_cost: {}", curr_cost, new_cost);
