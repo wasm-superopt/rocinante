@@ -95,10 +95,10 @@ impl Superoptimizer {
                                 // Accept this transform.
                                 curr_cost = new_cost;
                             } else {
-                                // Following computes min(1, exp(-1.0 * new_cost/ curr_cost))
-                                // TODO(taegyunkim): Use parameter \beta instead of -1.0
+                                // Following computes min(1, exp(-0.4 * new_cost/ curr_cost))
+                                // TODO(taegyunkim): Use parameter \beta instead of -0.4
                                 let p: f64 = (1.0 as f64)
-                                    .min((-1.0 * (new_cost as f64) / (curr_cost as f64)).exp());
+                                    .min((-0.4 * (new_cost as f64) / (curr_cost as f64)).exp());
                                 let d = Bernoulli::new(p).unwrap();
                                 #[cfg(debug_assertions)]
                                 println!("p: {}", p);
