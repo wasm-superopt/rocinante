@@ -1,10 +1,9 @@
+use super::NUM_TEST_CASES;
 use crate::wasmi_utils;
 use rand::Rng;
 use wasmi::{
     nan_preserving_float, FuncInstance, FuncRef, NopExternals, RuntimeValue, Trap, ValueType,
 };
-
-const NUM_TEST_CASES: usize = 10;
 
 pub type Input = Vec<RuntimeValue>;
 
@@ -100,7 +99,7 @@ pub fn generate_test_cases<R: Rng + ?Sized>(
     inputs.into_iter().zip(outputs.into_iter()).collect()
 }
 
-pub fn invoke_with_inputs(func_ref: &FuncRef, inputs: &[Input]) -> Vec<Output> {
+fn invoke_with_inputs(func_ref: &FuncRef, inputs: &[Input]) -> Vec<Output> {
     let mut outputs: Vec<Output> = Vec::with_capacity(inputs.len());
     for input in inputs {
         let output = FuncInstance::invoke(func_ref, input, &mut NopExternals);
@@ -136,7 +135,7 @@ pub fn eval_test_cases(
     if result_or_err.is_err() {
         #[cfg(debug_assertions)]
         println!("Failed to convert to wasmi module.");
-        return 64 * test_cases.len() as u32;
+        return 32 * test_cases.len() as u32;
     }
 
     let module_or_err = result_or_err.unwrap();
@@ -144,14 +143,14 @@ pub fn eval_test_cases(
     if module_or_err.is_err() {
         #[cfg(debug_assertions)]
         println!("Failed to convert to wasmi module.");
-        return 64 * test_cases.len() as u32;
+        return 32 * test_cases.len() as u32;
     }
     let module = module_or_err.unwrap();
     let instance_or_err = wasmi::ModuleInstance::new(&module, &wasmi::ImportsBuilder::default());
     if instance_or_err.is_err() {
         #[cfg(debug_assertions)]
         println!("Failed to convert to wasmi instance.");
-        return 64 * test_cases.len() as u32;
+        return 32 * test_cases.len() as u32;
     }
     let instance = instance_or_err.unwrap().assert_no_start();
     let candidate_func = wasmi_utils::func_by_name(&instance, "candidate").unwrap();
