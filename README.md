@@ -18,15 +18,23 @@
 $> cargo run -- help
 
 USAGE:
-    rocinante <FILE> [algorithm] [SUBCOMMAND]
+    rocinante [OPTIONS] <FILE> [SUBCOMMAND]
 
 FLAGS:
     -h, --help       Prints help information
     -V, --version    Prints version information
 
+OPTIONS:
+    -a <algorithm>          Superoptimization algorithm to use. [default: Stoke]  [possible values: Random, Stoke]
+    -i <interpreter>        Which interpreter to use for evaluating test cases. [default: Wasmer]  [possible values:
+                            Wasmi, Wasmer, Wasmtime]
+
 ARGS:
-    <FILE>         .wasm/.wat file to optimize
-    <algorithm>    Superoptimization algorithm to use. [values: Random, Stoke]
+    <FILE>    .wasm/.wat/.wast file to optimize
+
+SUBCOMMANDS:
+    help     Prints this message or the help of the given subcommand(s)
+    print    Prints all functions in the given module.
 ```
 
 ```shell

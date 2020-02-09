@@ -9,7 +9,7 @@ const NUM_TEST_CASES: usize = 16;
 /// incorrectly.
 const EPSILON: u32 = 1;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumString)]
 pub enum InterpreterKind {
     Wasmi,
     Wasmer,
