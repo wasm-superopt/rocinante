@@ -163,12 +163,10 @@ fn gen_random_input<R: Rng + ?Sized>(rng: &mut R, param_types: &[ValueType]) -> 
 }
 
 fn invoke_with_inputs(func_ref: &FuncRef, inputs: &[Input]) -> Vec<Output> {
-    let mut outputs: Vec<Output> = Vec::with_capacity(inputs.len());
-    for input in inputs {
-        let output = FuncInstance::invoke(func_ref, input, &mut NopExternals);
-        outputs.push(output);
-    }
-    outputs
+    inputs
+        .iter()
+        .map(|input| FuncInstance::invoke(func_ref, input, &mut NopExternals))
+        .collect()
 }
 
 #[cfg(test)]

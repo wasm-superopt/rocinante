@@ -87,10 +87,7 @@ fn hamming_distance(output1: &Output, output2: &Output) -> u32 {
                 "Spec and candidate function return type don't match."
             );
 
-            for i in 0..val_vec1.len() {
-                let val1 = &val_vec1[i];
-                let val2 = &val_vec2[i];
-
+            for (val1, val2) in val_vec1.iter().zip(val_vec2.iter()) {
                 match (val1, val2) {
                     (Value::I32(x), Value::I32(y)) => {
                         dist += (x ^ y).count_ones();
@@ -135,10 +132,5 @@ fn gen_random_input(param_types: &[types::Type]) -> Input {
 }
 
 fn invoke_with_inputs(func: &DynFunc, inputs: &[Input]) -> Vec<Output> {
-    let mut outputs: Vec<Output> = Vec::with_capacity(inputs.len());
-    for input in inputs {
-        let output = func.call(input);
-        outputs.push(output);
-    }
-    outputs
+    inputs.iter().map(|input| func.call(input)).collect()
 }
