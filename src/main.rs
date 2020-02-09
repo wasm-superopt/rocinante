@@ -67,16 +67,26 @@ fn main() {
         .about("Superoptimizer for WebAssembly")
         .arg(
             Arg::with_name("FILE")
-                .help(".wasm/.wat file to optimize")
+                .help(".wasm/.wat/.wast file to optimize")
                 .required(true)
                 .index(1),
         )
         .arg(
             Arg::with_name("algorithm")
+                .short("a")
                 .help("Superoptimization algorithm to use.")
                 .possible_value("Random")
                 .possible_value("Stoke")
                 .default_value("Stoke"),
+        )
+        .arg(
+            Arg::with_name("interpreter")
+                .short("i")
+                .help("Which interpreter to use for evaluating test cases.")
+                .possible_value("Wasmi")
+                .possible_value("Wasmer")
+                .possible_value("Wasmtime")
+                .default_value("Wasmer"),
         )
         .subcommand(
             SubCommand::with_name("print").about("Prints all functions in the given module."),
@@ -110,10 +120,14 @@ fn main() {
             debug::print_functions(&module);
         } else {
             let algorithm = matches.value_of("algorithm").unwrap();
+            let interpreter_kind = matches.value_of("interpreter").unwrap();
             // TODO(taegyunkim): Propagate the template function.
             debug::print_functions(&module);
-            let optimizer =
-                stoke::Superoptimizer::new(Algorithm::from_str(algorithm).unwrap(), module);
+            let optimizer = stoke::Superoptimizer::new(
+                Algorithm::from_str(algorithm).unwrap(),
+                exec::InterpreterKind::from_str(interpreter_kind).unwrap(),
+                module,
+            );
             let mut rng = rand::thread_rng();
             optimizer.synthesize(&mut rng, constants);
         }

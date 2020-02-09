@@ -12,24 +12,22 @@ pub type Output = Result<Option<RuntimeValue>, Trap>;
 
 pub type TestCases = Vec<(Input, Output)>;
 
+#[derive(Default)]
 pub struct Wasmi {
-    kind: InterpreterKind,
     test_cases: TestCases,
     // Return type bits is a vector to support multi-return of WASM.
     return_type_bits: Vec<u32>,
 }
 
-impl Interpreter for Wasmi {
-    fn new() -> Self {
-        Self {
-            kind: InterpreterKind::Wasmi,
-            test_cases: Vec::new(),
-            return_type_bits: Vec::new(),
-        }
+impl Wasmi {
+    pub fn new() -> Self {
+        Default::default()
     }
+}
 
+impl Interpreter for Wasmi {
     fn kind(&self) -> InterpreterKind {
-        self.kind
+        InterpreterKind::Wasmi
     }
 
     fn print_test_cases(&self) {}

@@ -8,23 +8,21 @@ pub type Output = Result<Vec<Value>, error::CallError>;
 
 pub type TestCases = Vec<(Input, Output)>;
 
+#[derive(Default)]
 pub struct Wasmer {
-    kind: InterpreterKind,
     test_cases: TestCases,
     return_type_bits: Vec<u32>,
 }
 
-impl Interpreter for Wasmer {
-    fn new() -> Self {
-        Self {
-            kind: InterpreterKind::Wasmer,
-            test_cases: Vec::new(),
-            return_type_bits: Vec::new(),
-        }
+impl Wasmer {
+    pub fn new() -> Self {
+        Default::default()
     }
+}
 
+impl Interpreter for Wasmer {
     fn kind(&self) -> InterpreterKind {
-        self.kind
+        InterpreterKind::Wasmer
     }
 
     fn print_test_cases(&self) {}

@@ -1,5 +1,5 @@
 use self::transform::*;
-use crate::exec::Interpreter;
+use crate::exec::InterpreterKind;
 use crate::{debug, exec, parity_wasm_utils, solver, Algorithm};
 use parity_wasm::elements::{
     FuncBody, FunctionType, Instruction, Instructions, Internal, Local, Module, ValueType,
@@ -13,12 +13,17 @@ pub mod whitelist;
 
 pub struct Superoptimizer {
     algorithm: Algorithm,
+    interpreter_kind: InterpreterKind,
     module: Module,
 }
 
 impl Superoptimizer {
-    pub fn new(algorithm: Algorithm, module: Module) -> Self {
-        Superoptimizer { algorithm, module }
+    pub fn new(algorithm: Algorithm, interpreter_kind: InterpreterKind, module: Module) -> Self {
+        Superoptimizer {
+            algorithm,
+            interpreter_kind,
+            module,
+        }
     }
 
     pub fn run(&self) {}
@@ -34,8 +39,7 @@ impl Superoptimizer {
             if let Internal::Function(_idx) = export_entry.internal() {
                 let func_name = export_entry.field();
 
-                // TODO(taegyunkim): Let the user choose which interpreter to use.
-                let mut interpreter = exec::wasmer::Wasmer::new();
+                let mut interpreter = exec::get_interpreter(self.interpreter_kind);
                 interpreter
                     .generate_test_cases(&self.module.clone().to_bytes().unwrap(), func_name);
 
