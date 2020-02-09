@@ -34,7 +34,8 @@ impl Superoptimizer {
             if let Internal::Function(_idx) = export_entry.internal() {
                 let func_name = export_entry.field();
 
-                let mut interpreter = exec::wasmi::Wasmi::new();
+                // TODO(taegyunkim): Let the user choose which interpreter to use.
+                let mut interpreter = exec::wasmer::Wasmer::new();
                 interpreter
                     .generate_test_cases(&self.module.clone().to_bytes().unwrap(), func_name);
 
