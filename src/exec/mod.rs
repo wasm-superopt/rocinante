@@ -1,5 +1,6 @@
 pub mod wasmer;
 pub mod wasmi;
+pub mod wasmtime;
 
 const NUM_TEST_CASES: usize = 16;
 
