@@ -6,6 +6,7 @@ extern crate parity_wasm;
 extern crate rand;
 extern crate strum;
 extern crate wabt;
+extern crate wasmer_runtime;
 extern crate wasmi;
 extern crate wasmparser;
 extern crate wast;

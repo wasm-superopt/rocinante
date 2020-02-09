@@ -1,4 +1,5 @@
 use self::transform::*;
+use crate::exec::Interpreter;
 use crate::{debug, exec, parity_wasm_utils, solver, Algorithm};
 use parity_wasm::elements::{
     FuncBody, FunctionType, Instruction, Instructions, Internal, Local, Module, ValueType,
@@ -24,14 +25,6 @@ impl Superoptimizer {
 
     /// Finds a module that has functions equivalent to the functions in the given module.
     pub fn synthesize<R: Rng + ?Sized>(&self, rng: &mut R, constants: Vec<i32>) {
-        // Module in wasmi, WASM interpreter. Instantiate this here and pass
-        // down to exec module functions to avoid re-instantiation.
-        let wasmi_module = wasmi::Module::from_parity_wasm_module(self.module.clone())
-            .expect("Failed to load parity-wasm Module.");
-        let instance = wasmi::ModuleInstance::new(&wasmi_module, &wasmi::ImportsBuilder::default())
-            .expect("Failed to instantiate wasm module.")
-            .assert_no_start();
-
         let export_section = self
             .module
             .export_section()
@@ -41,7 +34,11 @@ impl Superoptimizer {
             if let Internal::Function(_idx) = export_entry.internal() {
                 let func_name = export_entry.field();
 
-                let test_cases = exec::generate_test_cases(rng, &instance, func_name);
+                // TODO(taegyunkim): Let the user choose which interpreter to use.
+                let mut interpreter = exec::wasmer::Wasmer::new();
+                interpreter
+                    .generate_test_cases(&self.module.clone().to_bytes().unwrap(), func_name);
+
                 let (func_type, func_body) =
                     parity_wasm_utils::func_by_name(&self.module, func_name);
 
@@ -58,7 +55,8 @@ impl Superoptimizer {
                     constants.clone(),
                 );
                 let mut module = candidate_func.to_module();
-                let mut curr_cost = exec::eval_test_cases(&module, &test_cases);
+                let mut curr_cost =
+                    interpreter.eval_test_cases(&module.clone().to_bytes().unwrap());
                 loop {
                     #[cfg(debug_assertions)]
                     debug::print_functions(&module);
@@ -81,7 +79,7 @@ impl Superoptimizer {
                     let transform_info = transform.operate(rng, &mut candidate_func);
 
                     module = candidate_func.to_module();
-                    let new_cost = exec::eval_test_cases(&module, &test_cases);
+                    let new_cost = interpreter.eval_test_cases(&module.clone().to_bytes().unwrap());
 
                     #[cfg(debug_assertions)]
                     println!("curr_cost: {}, new_cost: {}", curr_cost, new_cost);
@@ -95,10 +93,10 @@ impl Superoptimizer {
                                 // Accept this transform.
                                 curr_cost = new_cost;
                             } else {
-                                // Following computes min(1, exp(-1.0 * new_cost/ curr_cost))
-                                // TODO(taegyunkim): Use parameter \beta instead of -1.0
+                                // Following computes min(1, exp(-0.4 * new_cost/ curr_cost))
+                                // TODO(taegyunkim): Use parameter \beta instead of -0.4
                                 let p: f64 = (1.0 as f64)
-                                    .min((-1.0 * (new_cost as f64) / (curr_cost as f64)).exp());
+                                    .min((-0.2 * (new_cost as f64) / (curr_cost as f64)).exp());
                                 let d = Bernoulli::new(p).unwrap();
                                 #[cfg(debug_assertions)]
                                 println!("p: {}", p);

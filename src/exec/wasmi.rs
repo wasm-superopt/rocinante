@@ -1,19 +1,102 @@
+use super::{Interpreter, InterpreterKind, EPSILON, NUM_TEST_CASES};
 use crate::wasmi_utils;
 use rand::Rng;
 use wasmi::{
-    nan_preserving_float, FuncInstance, FuncRef, NopExternals, RuntimeValue, Trap, ValueType,
+    nan_preserving_float, FuncInstance, FuncRef, ImportsBuilder, Module, ModuleInstance,
+    NopExternals, RuntimeValue, Trap, ValueType,
 };
-
-const NUM_TEST_CASES: usize = 10;
 
 pub type Input = Vec<RuntimeValue>;
 
 pub type Output = Result<Option<RuntimeValue>, Trap>;
 
+pub type TestCases = Vec<(Input, Output)>;
+
+pub struct Wasmi {
+    kind: InterpreterKind,
+    test_cases: TestCases,
+    // Return type bits is a vector to support multi-return of WASM.
+    return_type_bits: Vec<u32>,
+}
+
+impl Interpreter for Wasmi {
+    fn new() -> Self {
+        Self {
+            kind: InterpreterKind::Wasmi,
+            test_cases: Vec::new(),
+            return_type_bits: Vec::new(),
+        }
+    }
+
+    fn kind(&self) -> InterpreterKind {
+        self.kind
+    }
+
+    fn print_test_cases(&self) {}
+
+    fn generate_test_cases(&mut self, spec: &[u8], func_name: &str) {
+        let mut rng = rand::thread_rng();
+        let module = Module::from_buffer(&spec).unwrap();
+        let instance = ModuleInstance::new(&module, &ImportsBuilder::default())
+            .unwrap()
+            .assert_no_start();
+        let func_ref = wasmi_utils::func_by_name(&instance, func_name)
+            .unwrap_or_else(|_| panic!("Module doesn't have function named {}", func_name));
+        let signature = func_ref.signature();
+        let mut inputs: Vec<Input> = Vec::with_capacity(NUM_TEST_CASES);
+        for _ in 0..NUM_TEST_CASES {
+            inputs.push(gen_random_input(&mut rng, signature.params()));
+        }
+        let outputs = invoke_with_inputs(&func_ref, &inputs);
+        self.test_cases = inputs.into_iter().zip(outputs.into_iter()).collect();
+
+        let return_type = signature.return_type();
+        match return_type {
+            Some(typ) => match typ {
+                ValueType::I32 => self.return_type_bits.push(32),
+                unimplemented => {
+                    panic!("{:?} type not implemented", unimplemented);
+                }
+            },
+            None => {
+                panic!("Void function not supported.");
+            }
+        }
+    }
+
+    fn eval_test_cases(&self, candidate: &[u8]) -> u32 {
+        let return_type_bits: u32 = self.return_type_bits.iter().sum();
+
+        let module_or_err = Module::from_buffer(candidate);
+        if module_or_err.is_err() {
+            #[cfg(debug_assertions)]
+            println!("Failed to convert to wasmi module.");
+            return (return_type_bits + EPSILON) * self.test_cases.len() as u32;
+        }
+        let module = module_or_err.unwrap();
+        let instance_or_err =
+            wasmi::ModuleInstance::new(&module, &wasmi::ImportsBuilder::default());
+        if instance_or_err.is_err() {
+            #[cfg(debug_assertions)]
+            println!("Failed to convert to wasmi instance.");
+            return (return_type_bits + EPSILON) * self.test_cases.len() as u32;
+        }
+        let instance = instance_or_err.unwrap().assert_no_start();
+        let candidate_func = wasmi_utils::func_by_name(&instance, "candidate").unwrap();
+        let mut dist = 0;
+        for (input, expected_output) in &self.test_cases {
+            let actual_output =
+                wasmi::FuncInstance::invoke(&candidate_func, &input, &mut wasmi::NopExternals);
+            dist += hamming_distance(&expected_output, &actual_output);
+        }
+        dist
+    }
+}
+
 /// Computes hamming distance between the outputs. We intentinoally use u32 here
 /// as the return type as it doesn't make sense to have negative values for the
 /// hamming distance.
-pub fn hamming_distance(output1: &Output, output2: &Output) -> u32 {
+fn hamming_distance(output1: &Output, output2: &Output) -> u32 {
     match (output1, output2) {
         (Ok(val_opt1), Ok(val_opt2)) => match (val_opt1, val_opt2) {
             (None, None) => panic!("Doens't support void functions."),
@@ -59,8 +142,6 @@ pub fn hamming_distance(output1: &Output, output2: &Output) -> u32 {
     }
 }
 
-pub type TestCases = Vec<(Input, Output)>;
-
 fn gen_random_input<R: Rng + ?Sized>(rng: &mut R, param_types: &[ValueType]) -> Input {
     let mut inputs = Vec::with_capacity(param_types.len());
 
@@ -81,89 +162,11 @@ fn gen_random_input<R: Rng + ?Sized>(rng: &mut R, param_types: &[ValueType]) -> 
     inputs
 }
 
-pub fn generate_test_cases<R: Rng + ?Sized>(
-    rng: &mut R,
-    instance: &wasmi::ModuleInstance,
-    func_name: &str,
-) -> TestCases {
-    let func_ref = wasmi_utils::func_by_name(instance, func_name)
-        .unwrap_or_else(|_| panic!("Module doesn't have function named {}", func_name));
-    let signature = func_ref.signature();
-
-    let mut inputs: Vec<Input> = Vec::with_capacity(NUM_TEST_CASES);
-    for _ in 0..NUM_TEST_CASES {
-        inputs.push(gen_random_input(rng, signature.params()));
-    }
-
-    let outputs = invoke_with_inputs(&func_ref, &inputs);
-
-    inputs.into_iter().zip(outputs.into_iter()).collect()
-}
-
-pub fn invoke_with_inputs(func_ref: &FuncRef, inputs: &[Input]) -> Vec<Output> {
-    let mut outputs: Vec<Output> = Vec::with_capacity(inputs.len());
-    for input in inputs {
-        let output = FuncInstance::invoke(func_ref, input, &mut NopExternals);
-        outputs.push(output);
-    }
-    outputs
-}
-
-// NOTE(taegyunkim): When a given WASM module isn't valid, wasmi crate panics when we
-// try to instantiate it via a call to wasmi::Module::from_parity_wasm_module(),
-// and outputs error message unnecessarily. This is to suppress that.
-// https://stackoverflow.com/a/59211505
-fn catch_unwind_silent<F: FnOnce() -> R + std::panic::UnwindSafe, R>(
-    f: F,
-) -> std::thread::Result<R> {
-    let prev_hook = std::panic::take_hook();
-    std::panic::set_hook(Box::new(|_| {}));
-    let result = std::panic::catch_unwind(f);
-    std::panic::set_hook(prev_hook);
-    result
-}
-
-// NOTE(taegyunkim): The return type of this function is unsigned instead of
-// signed because it represents the sum of hamming distances. When it overflows,
-// rust will panic.
-pub fn eval_test_cases(
-    module: &parity_wasm::elements::Module,
-    test_cases: &[(Input, Output)],
-) -> u32 {
-    // The module is validated this step.
-    let result_or_err =
-        catch_unwind_silent(|| wasmi::Module::from_parity_wasm_module(module.clone()));
-    if result_or_err.is_err() {
-        #[cfg(debug_assertions)]
-        println!("Failed to convert to wasmi module.");
-        return 64 * test_cases.len() as u32;
-    }
-
-    let module_or_err = result_or_err.unwrap();
-
-    if module_or_err.is_err() {
-        #[cfg(debug_assertions)]
-        println!("Failed to convert to wasmi module.");
-        return 64 * test_cases.len() as u32;
-    }
-    let module = module_or_err.unwrap();
-    let instance_or_err = wasmi::ModuleInstance::new(&module, &wasmi::ImportsBuilder::default());
-    if instance_or_err.is_err() {
-        #[cfg(debug_assertions)]
-        println!("Failed to convert to wasmi instance.");
-        return 64 * test_cases.len() as u32;
-    }
-    let instance = instance_or_err.unwrap().assert_no_start();
-    let candidate_func = wasmi_utils::func_by_name(&instance, "candidate").unwrap();
-
-    let mut dist = 0;
-    for (input, expected_output) in test_cases {
-        let actual_output =
-            wasmi::FuncInstance::invoke(&candidate_func, input, &mut wasmi::NopExternals);
-        dist += hamming_distance(expected_output, &actual_output);
-    }
-
-    dist
+fn invoke_with_inputs(func_ref: &FuncRef, inputs: &[Input]) -> Vec<Output> {
+    inputs
+        .iter()
+        .map(|input| FuncInstance::invoke(func_ref, input, &mut NopExternals))
+        .collect()
 }
 
 #[cfg(test)]
