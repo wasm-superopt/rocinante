@@ -8,23 +8,21 @@ pub type Output = Result<Box<[Val]>, Trap>;
 
 pub type TestCases = Vec<(Input, Output)>;
 
+#[derive(Default)]
 pub struct Wasmtime {
-    kind: InterpreterKind,
     test_cases: TestCases,
     return_type_bits: Vec<u32>,
 }
 
-impl Interpreter for Wasmtime {
-    fn new() -> Self {
-        Self {
-            kind: InterpreterKind::Wasmtime,
-            test_cases: Vec::new(),
-            return_type_bits: Vec::new(),
-        }
+impl Wasmtime {
+    pub fn new() -> Self {
+        Default::default()
     }
+}
 
+impl Interpreter for Wasmtime {
     fn kind(&self) -> InterpreterKind {
-        self.kind
+        InterpreterKind::Wasmtime
     }
 
     fn print_test_cases(&self) {}

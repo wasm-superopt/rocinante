@@ -1,5 +1,5 @@
 use self::transform::*;
-use crate::exec::Interpreter;
+use crate::exec::InterpreterKind;
 use crate::{debug, exec, parity_wasm_utils, solver, Algorithm};
 use parity_wasm::elements::{
     FuncBody, FunctionType, Instruction, Instructions, Internal, Local, Module, ValueType,
@@ -35,7 +35,7 @@ impl Superoptimizer {
                 let func_name = export_entry.field();
 
                 // TODO(taegyunkim): Let the user choose which interpreter to use.
-                let mut interpreter = exec::wasmer::Wasmer::new();
+                let mut interpreter = exec::get_interpreter(InterpreterKind::Wasmer);
                 interpreter
                     .generate_test_cases(&self.module.clone().to_bytes().unwrap(), func_name);
 
