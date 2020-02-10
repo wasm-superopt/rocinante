@@ -12,6 +12,7 @@ fn thread_rng_outer<R: Rng + ?Sized>(rng: &mut R) {
 fn bench_thread_rng(c: &mut Criterion) {
     let mut group = c.benchmark_group("ThreadRng");
 
+    // As thread_rng is lazily-initialized make sure that it's initliazed here.
     let mut rng = rand::thread_rng();
     let _ = rng.gen::<i32>();
 
