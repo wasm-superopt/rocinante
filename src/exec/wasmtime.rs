@@ -9,7 +9,6 @@ pub type Output = Result<Box<[Val]>, Trap>;
 pub type TestCases = Vec<(Input, Output)>;
 
 pub struct Wasmtime {
-    #[allow(dead_code)]
     store: Store,
     instance: Instance,
     func_name: String,
@@ -72,13 +71,12 @@ impl Interpreter for Wasmtime {
     fn eval_test_cases(&self, candidate: &[u8]) -> u32 {
         let return_type_bits: u32 = self.return_type_bits.iter().sum();
 
-        let store = wasmtime::Store::default();
-        let module_or_err = Module::new(&store, &candidate);
+        let module_or_err = Module::new(&self.store, &candidate);
         if module_or_err.is_err() {
             return (return_type_bits + EPSILON) * self.test_cases.len() as u32;
         }
         let module = module_or_err.unwrap();
-        let instance_or_err = Instance::new(&store, &module, &[]);
+        let instance_or_err = Instance::new(&self.store, &module, &[]);
         if instance_or_err.is_err() {
             return (return_type_bits + EPSILON) * self.test_cases.len() as u32;
         }
