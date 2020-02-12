@@ -90,8 +90,16 @@ pub fn build_module(func_name: &str, func_type: &FunctionType, func_body: FuncBo
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{debug, wasmi_utils};
+    use crate::debug;
     use parity_wasm::elements::{Instruction, Instructions, ValueType};
+
+    fn instantiate(module: parity_wasm::elements::Module) -> wasmi::ModuleRef {
+        let module =
+            wasmi::Module::from_parity_wasm_module(module).expect("Failed to load wasmi module.");
+        wasmi::ModuleInstance::new(&module, &wasmi::ImportsBuilder::default())
+            .expect("Failed to build wasmi module instance.")
+            .assert_no_start()
+    }
 
     #[test]
     fn build_module_test() {
@@ -108,7 +116,7 @@ mod tests {
 
         let add_module = build_module("add", &func_type, func_body);
         debug::print_functions(&add_module);
-        let instance = wasmi_utils::instantiate(add_module);
+        let instance = instantiate(add_module);
         assert_eq!(
             instance
                 .invoke_export(

@@ -8,15 +8,44 @@ pub type Output = Result<Vec<Value>, error::CallError>;
 
 pub type TestCases = Vec<(Input, Output)>;
 
-#[derive(Default)]
 pub struct Wasmer {
+    instance: Instance,
+    func_name: String,
     test_cases: TestCases,
     return_type_bits: Vec<u32>,
 }
 
 impl Wasmer {
-    pub fn new() -> Self {
-        Default::default()
+    pub fn new(spec: &[u8], func_name: &str) -> Self {
+        let import_object = imports! {};
+        let instance = instantiate(spec, &import_object).unwrap();
+        let func = instance.dyn_func(func_name).unwrap();
+        let mut inputs: Vec<Input> = Vec::with_capacity(NUM_TEST_CASES);
+        for _ in 0..NUM_TEST_CASES {
+            inputs.push(gen_random_input(func.signature().params()));
+        }
+        let outputs = invoke_with_inputs(&func, &inputs);
+        let test_cases = inputs.into_iter().zip(outputs.into_iter()).collect();
+
+        let return_type = func.signature().params();
+        let mut return_type_bits = Vec::new();
+        for typ in return_type {
+            match typ {
+                types::Type::I32 => {
+                    return_type_bits.push(32);
+                }
+                unimplemented => {
+                    panic!("{:?} type not implemented", unimplemented);
+                }
+            }
+        }
+
+        Self {
+            instance,
+            func_name: String::from(func_name),
+            test_cases,
+            return_type_bits,
+        }
     }
 }
 
@@ -27,35 +56,22 @@ impl Interpreter for Wasmer {
 
     fn print_test_cases(&self) {}
 
-    fn generate_test_cases(&mut self, spec: &[u8], func_name: &str) {
-        let import_object = imports! {};
-        let instance = instantiate(spec, &import_object).unwrap();
-        let func = instance.dyn_func(func_name).unwrap();
-        let mut inputs: Vec<Input> = Vec::with_capacity(NUM_TEST_CASES);
-        for _ in 0..NUM_TEST_CASES {
-            inputs.push(gen_random_input(func.signature().params()));
-        }
-        let outputs = invoke_with_inputs(&func, &inputs);
-        self.test_cases = inputs.into_iter().zip(outputs.into_iter()).collect();
-
-        let return_type = func.signature().params();
-        for typ in return_type {
-            match typ {
-                types::Type::I32 => {
-                    self.return_type_bits.push(32);
-                }
-                unimplemented => {
-                    panic!("{:?} type not implemented", unimplemented);
-                }
-            }
-        }
-    }
-
     fn eval_test_cases(&self, candidate: &[u8]) -> u32 {
         let return_type_bits: u32 = self.return_type_bits.iter().sum();
 
+        let module_or_err = compile_with_config(
+            candidate,
+            CompilerConfig {
+                enforce_stack_check: true,
+                ..Default::default()
+            },
+        );
+        if module_or_err.is_err() {
+            return (return_type_bits + EPSILON) * self.test_cases.len() as u32;
+        }
+        let module = module_or_err.unwrap();
         let import_object = imports! {};
-        let instance_or_err = instantiate(candidate, &import_object);
+        let instance_or_err = module.instantiate(&import_object);
         if instance_or_err.is_err() {
             return (return_type_bits + EPSILON) * self.test_cases.len() as u32;
         }
@@ -71,6 +87,22 @@ impl Interpreter for Wasmer {
             dist += hamming_distance(&expected_output, &actual_output);
         }
         dist
+    }
+
+    fn add_test_case(&mut self, wasmi_input: &[::wasmi::RuntimeValue]) {
+        let func = self.instance.dyn_func(&self.func_name).unwrap();
+
+        let input: Vec<Value> = wasmi_input
+            .iter()
+            .map(|i| match i {
+                ::wasmi::RuntimeValue::I32(x) => Value::I32(*x),
+                unimplemented => panic!("type not implemented {:?}", unimplemented),
+            })
+            .collect();
+
+        let output = func.call(&input);
+
+        self.test_cases.push((input, output));
     }
 }
 

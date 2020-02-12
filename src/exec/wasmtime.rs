@@ -8,26 +8,17 @@ pub type Output = Result<Box<[Val]>, Trap>;
 
 pub type TestCases = Vec<(Input, Output)>;
 
-#[derive(Default)]
 pub struct Wasmtime {
+    #[allow(dead_code)]
+    store: Store,
+    instance: Instance,
+    func_name: String,
     test_cases: TestCases,
     return_type_bits: Vec<u32>,
 }
 
 impl Wasmtime {
-    pub fn new() -> Self {
-        Default::default()
-    }
-}
-
-impl Interpreter for Wasmtime {
-    fn kind(&self) -> InterpreterKind {
-        InterpreterKind::Wasmtime
-    }
-
-    fn print_test_cases(&self) {}
-
-    fn generate_test_cases(&mut self, spec: &[u8], func_name: &str) {
+    pub fn new(spec: &[u8], func_name: &str) -> Self {
         let store = wasmtime::Store::default();
         let module = Module::new(&store, &spec).unwrap();
         let instance = Instance::new(&store, &module, &[]).unwrap();
@@ -43,20 +34,40 @@ impl Interpreter for Wasmtime {
             inputs.push(gen_random_input(func.r#type().params()));
         }
         let outputs = invoke_with_inputs(&func, &inputs);
-        self.test_cases = inputs.into_iter().zip(outputs.into_iter()).collect();
+        let test_cases = inputs.into_iter().zip(outputs.into_iter()).collect();
 
         let return_type = func.r#type().results();
+        let mut return_type_bits = Vec::new();
         for typ in return_type {
             match typ {
                 ValType::I32 => {
-                    self.return_type_bits.push(32);
+                    return_type_bits.push(32);
                 }
                 unimplemented => {
                     panic!("{:?} type not implemented", unimplemented);
                 }
             }
         }
+
+        // TODO(taegyunkim): Instead of explicitly dropping the reference, just keep it by
+        // specifying explicit lifetime.
+        drop(func);
+        Self {
+            store,
+            instance,
+            func_name: String::from(func_name),
+            test_cases,
+            return_type_bits,
+        }
     }
+}
+
+impl Interpreter for Wasmtime {
+    fn kind(&self) -> InterpreterKind {
+        InterpreterKind::Wasmtime
+    }
+
+    fn print_test_cases(&self) {}
 
     fn eval_test_cases(&self, candidate: &[u8]) -> u32 {
         let return_type_bits: u32 = self.return_type_bits.iter().sum();
@@ -84,6 +95,28 @@ impl Interpreter for Wasmtime {
             dist += hamming_distance(&expected_output, &actual_output);
         }
         dist
+    }
+
+    fn add_test_case(&mut self, wasmi_input: &[::wasmi::RuntimeValue]) {
+        let func = self
+            .instance
+            .find_export_by_name(&self.func_name)
+            .unwrap()
+            .func()
+            .unwrap()
+            .borrow();
+
+        let input: Vec<Val> = wasmi_input
+            .iter()
+            .map(|i| match i {
+                ::wasmi::RuntimeValue::I32(x) => Val::I32(*x),
+                unimplemented => panic!("type not implemented {:?}", unimplemented),
+            })
+            .collect();
+
+        let output = func.call(&input);
+
+        self.test_cases.push((input, output));
     }
 }
 

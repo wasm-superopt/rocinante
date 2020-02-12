@@ -27,7 +27,7 @@ FLAGS:
 OPTIONS:
     -a <algorithm>          Superoptimization algorithm to use. [default: Stoke]  [possible values: Random, Stoke]
     -i <interpreter>        Which interpreter to use for evaluating test cases. [default: Wasmer]  [possible values:
-                            Wasmi, Wasmer, Wasmtime]
+                            Wasmer, Wasmtime]
 
 ARGS:
     <FILE>    .wasm/.wat/.wast file to optimize

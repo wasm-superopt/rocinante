@@ -29,7 +29,6 @@ pub mod exec;
 mod parity_wasm_utils;
 pub mod solver;
 pub mod stoke;
-mod wasmi_utils;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumString)]
 pub enum Algorithm {
@@ -83,7 +82,6 @@ fn main() {
             Arg::with_name("interpreter")
                 .short("i")
                 .help("Which interpreter to use for evaluating test cases.")
-                .possible_value("Wasmi")
                 .possible_value("Wasmer")
                 .possible_value("Wasmtime")
                 .default_value("Wasmer"),
