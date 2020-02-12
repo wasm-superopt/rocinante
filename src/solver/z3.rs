@@ -289,13 +289,21 @@ impl<'ctx> Z3Solver<'ctx> {
 #[cfg(test)]
 mod tests {
     use super::{VerifyResult, Z3Solver};
-    use crate::{parity_wasm_utils, wasmi_utils};
+    use crate::parity_wasm_utils;
 
     fn wat2module<S: AsRef<[u8]>>(source: S) -> parity_wasm::elements::Module {
         let binary = wabt::wat2wasm(source).expect("Failed to parse .wat");
         wasmparser::validate(&binary, None /* Uses default parser config */)
             .expect("Failed to validate.");
         parity_wasm::elements::Module::from_bytes(binary).expect("Failed to deserialize.")
+    }
+
+    fn instantiate(module: parity_wasm::elements::Module) -> wasmi::ModuleRef {
+        let module =
+            wasmi::Module::from_parity_wasm_module(module).expect("Failed to load wasmi module.");
+        wasmi::ModuleInstance::new(&module, &wasmi::ImportsBuilder::default())
+            .expect("Failed to build wasmi module instance.")
+            .assert_no_start()
     }
 
     // Verifies that x + x == 2 * x.
@@ -401,12 +409,12 @@ mod tests {
         if let VerifyResult::CounterExample(cex_vec) = result {
             assert_eq!(cex_vec.len(), 1);
 
-            let spec_instance = wasmi_utils::instantiate(spec_module);
+            let spec_instance = instantiate(spec_module);
             let spec_output = spec_instance
                 .invoke_export("add", &cex_vec, &mut wasmi::NopExternals)
                 .unwrap();
 
-            let candidate_instance = wasmi_utils::instantiate(candidate_module);
+            let candidate_instance = instantiate(candidate_module);
             let candidate_output = candidate_instance
                 .invoke_export("mul", &cex_vec, &mut wasmi::NopExternals)
                 .unwrap();

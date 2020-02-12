@@ -1,5 +1,4 @@
 pub mod wasmer;
-pub mod wasmi;
 pub mod wasmtime;
 
 const NUM_TEST_CASES: usize = 16;
@@ -11,26 +10,29 @@ const EPSILON: u32 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumString)]
 pub enum InterpreterKind {
-    Wasmi,
     Wasmer,
     Wasmtime,
 }
 
 pub trait Interpreter {
     fn kind(&self) -> InterpreterKind;
-    fn generate_test_cases(&mut self, spec: &[u8], func_name: &str);
     fn print_test_cases(&self);
 
     // NOTE(taegyunkim): The return type of this function is unsigned instead of
     // signed because it represents the sum of hamming distances. When it overflows,
     // rust will panic.
     fn eval_test_cases(&self, candidate: &[u8]) -> u32;
+
+    fn add_test_case(&mut self, input: &[::wasmi::RuntimeValue]);
 }
 
-pub fn get_interpreter(kind: InterpreterKind) -> Box<dyn Interpreter> {
+pub fn get_interpreter(
+    kind: InterpreterKind,
+    spec: &[u8],
+    func_name: &str,
+) -> Box<dyn Interpreter> {
     match kind {
-        InterpreterKind::Wasmi => Box::new(wasmi::Wasmi::new()),
-        InterpreterKind::Wasmer => Box::new(wasmer::Wasmer::new()),
-        InterpreterKind::Wasmtime => Box::new(wasmtime::Wasmtime::new()),
+        InterpreterKind::Wasmer => Box::new(wasmer::Wasmer::new(spec, func_name)),
+        InterpreterKind::Wasmtime => Box::new(wasmtime::Wasmtime::new(spec, func_name)),
     }
 }

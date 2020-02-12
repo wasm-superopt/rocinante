@@ -39,9 +39,11 @@ impl Superoptimizer {
             if let Internal::Function(_idx) = export_entry.internal() {
                 let func_name = export_entry.field();
 
-                let mut interpreter = exec::get_interpreter(self.interpreter_kind);
-                interpreter
-                    .generate_test_cases(&self.module.clone().to_bytes().unwrap(), func_name);
+                let mut interpreter = exec::get_interpreter(
+                    self.interpreter_kind,
+                    &self.module.clone().to_bytes().unwrap(),
+                    func_name,
+                );
 
                 let (func_type, func_body) =
                     parity_wasm_utils::func_by_name(&self.module, func_name);
@@ -72,9 +74,9 @@ impl Superoptimizer {
                                 debug::print_functions(&module);
                                 break;
                             }
-                            solver::VerifyResult::CounterExample(_) => {
-                                // TODO(taegyunkim): Add input, output pair to
-                                // the test casese.
+                            solver::VerifyResult::CounterExample(values) => {
+                                println!("Adding new examples: {:?}", values);
+                                interpreter.add_test_case(&values);
                             }
                         }
                     }
