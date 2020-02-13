@@ -100,6 +100,11 @@ impl Interpreter for Wasmer {
             })
             .collect();
 
+        if self.test_cases.iter().find(|&(i, _)| *i == input) != None {
+            println!("Test case already included.");
+            return;
+        }
+
         let output = func.call(&input);
 
         self.test_cases.push((input, output));
