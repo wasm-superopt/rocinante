@@ -49,7 +49,7 @@ impl Superoptimizer {
                     parity_wasm_utils::func_by_name(&self.module, func_name);
 
                 // Check whether the spec contains only whitelisted instructions.
-                // whitelist::validate(func_body.code().elements());
+                whitelist::validate(func_body.code().elements());
 
                 let cfg = z3::Config::new();
                 let ctx = z3::Context::new(&cfg);

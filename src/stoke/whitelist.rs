@@ -144,6 +144,10 @@ impl Into<Instruction> for WhitelistedInstruction {
 
 pub fn validate(instrs: &[Instruction]) {
     for instr in instrs {
+        // TODO(taegyunkim): Handle control flow instructions separately.
+        if *instr == Instruction::End {
+            continue;
+        }
         let _: WhitelistedInstruction = instr.clone().into();
     }
 }
