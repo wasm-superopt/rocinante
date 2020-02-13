@@ -26,7 +26,6 @@ pub enum WhitelistedInstruction {
     GetLocal(u32),
     SetLocal(u32),
     TeeLocal(u32),
-    End,
     Nop,
 }
 
@@ -36,7 +35,7 @@ impl WhitelistedInstruction {
         // TODO(taegyunkim): Support increasing the number of locals.
         candidate_func: &mut CandidateFunc,
     ) -> WhitelistedInstruction {
-        match rng.gen_range(0, 21) {
+        match rng.gen_range(0, 20) {
             0 => WhitelistedInstruction::I32Add,
             1 => WhitelistedInstruction::I32Sub,
             2 => WhitelistedInstruction::I32Mul,
@@ -56,7 +55,6 @@ impl WhitelistedInstruction {
             16 => WhitelistedInstruction::GetLocal(candidate_func.sample_local_idx(rng)),
             17 => WhitelistedInstruction::SetLocal(candidate_func.sample_local_idx(rng)),
             18 => WhitelistedInstruction::TeeLocal(candidate_func.sample_local_idx(rng)),
-            19 => WhitelistedInstruction::End,
             _ => WhitelistedInstruction::Nop,
         }
     }
@@ -84,7 +82,6 @@ impl std::fmt::Display for WhitelistedInstruction {
             WhitelistedInstruction::GetLocal(i) => write!(f, "get_local {}", i),
             WhitelistedInstruction::SetLocal(i) => write!(f, "set_local {}", i),
             WhitelistedInstruction::TeeLocal(i) => write!(f, "tee_local {}", i),
-            WhitelistedInstruction::End => write!(f, "end"),
             WhitelistedInstruction::Nop => write!(f, "nop"),
         }
     }
@@ -112,7 +109,6 @@ impl From<Instruction> for WhitelistedInstruction {
             Instruction::GetLocal(i) => WhitelistedInstruction::GetLocal(i),
             Instruction::SetLocal(i) => WhitelistedInstruction::SetLocal(i),
             Instruction::TeeLocal(i) => WhitelistedInstruction::TeeLocal(i),
-            Instruction::End => WhitelistedInstruction::End,
             Instruction::Nop => WhitelistedInstruction::Nop,
             _ => panic!("{} not implemented", instr),
         }
@@ -141,7 +137,6 @@ impl Into<Instruction> for WhitelistedInstruction {
             WhitelistedInstruction::GetLocal(i) => Instruction::GetLocal(i),
             WhitelistedInstruction::SetLocal(i) => Instruction::SetLocal(i),
             WhitelistedInstruction::TeeLocal(i) => Instruction::TeeLocal(i),
-            WhitelistedInstruction::End => Instruction::End,
             WhitelistedInstruction::Nop => Instruction::Nop,
         }
     }
@@ -202,7 +197,6 @@ pub fn get_equiv_instr<R: Rng + ?Sized>(rng: &mut R, instr: &Instruction) -> Ins
         | WhitelistedInstruction::SetLocal(i)
         | WhitelistedInstruction::TeeLocal(i) => (*VAROP.choose(rng).unwrap())(i),
         WhitelistedInstruction::I32Const(i) => WhitelistedInstruction::I32Const(i),
-        WhitelistedInstruction::End => WhitelistedInstruction::End,
         WhitelistedInstruction::Nop => WhitelistedInstruction::Nop,
     }
     .into()
@@ -240,7 +234,6 @@ mod tests {
             Instruction::GetLocal(2),
             Instruction::SetLocal(3),
             Instruction::TeeLocal(4),
-            Instruction::End,
             Instruction::Nop,
         ]);
     }

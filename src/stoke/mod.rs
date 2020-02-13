@@ -49,7 +49,7 @@ impl Superoptimizer {
                     parity_wasm_utils::func_by_name(&self.module, func_name);
 
                 // Check whether the spec contains only whitelisted instructions.
-                whitelist::validate(func_body.code().elements());
+                // whitelist::validate(func_body.code().elements());
 
                 let cfg = z3::Config::new();
                 let ctx = z3::Context::new(&cfg);
@@ -138,7 +138,7 @@ impl CandidateFunc {
         Self {
             func_type: func_type.clone(),
             local_types: Vec::new(),
-            instrs: vec![Instruction::Nop; len],
+            instrs: vec![Instruction::Nop; len - 1],
             constants,
         }
     }
@@ -199,7 +199,10 @@ impl CandidateFunc {
             .map(|typ| Local::new(1, *typ))
             .collect();
 
-        FuncBody::new(locals, Instructions::new(self.instrs.clone()))
+        let mut instrs = self.instrs.clone();
+        instrs.push(Instruction::End);
+
+        FuncBody::new(locals, Instructions::new(instrs))
     }
 
     pub fn to_module(&self) -> Module {
