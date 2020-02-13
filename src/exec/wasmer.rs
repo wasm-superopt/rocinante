@@ -100,18 +100,15 @@ impl Interpreter for Wasmer {
             })
             .collect();
 
+        // NOTE(taegyunkim): It's possible that the verifier finds the same counterexample, avoid
+        // adding the same one.
         if self.test_cases.iter().find(|&(i, _)| *i == input) != None {
-            println!("Test case already included.");
             return;
         }
 
         let output = func.call(&input);
 
-        let prev_len = self.test_cases.len();
         self.test_cases.push((input, output));
-        let new_len = self.test_cases.len();
-
-        assert!(prev_len < new_len);
     }
 }
 
