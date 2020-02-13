@@ -107,7 +107,11 @@ impl Interpreter for Wasmer {
 
         let output = func.call(&input);
 
+        let prev_len = self.test_cases.len();
         self.test_cases.push((input, output));
+        let new_len = self.test_cases.len();
+
+        assert!(prev_len < new_len);
     }
 }
 
