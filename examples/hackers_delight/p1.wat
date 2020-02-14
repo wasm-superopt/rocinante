@@ -6,3 +6,11 @@
       (get_local 0))
   )
 )
+
+;; Above is equivalent to
+;; get_local 0
+;; i32.const 1
+;; i32.sub
+;; get_local 0
+;; i32.and
+;; end
