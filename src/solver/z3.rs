@@ -196,6 +196,9 @@ impl<'ctx> Converter<'ctx> {
                     let val = ast::BV::from_i64(&self.ctx, *c as i64, 32);
                     stack.push(val);
                 }
+                Instruction::Nop => {
+                    // Do nothing
+                }
                 Instruction::End => {
                     // NOTE: no need to handle this for programs without loops
                     // and control structures.
