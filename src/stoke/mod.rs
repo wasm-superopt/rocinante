@@ -138,7 +138,10 @@ impl CandidateFunc {
         Self {
             func_type: func_type.clone(),
             local_types: Vec::new(),
-            instrs: vec![Instruction::Nop; len],
+            // NOTE(taegyunkim): The original spec instruction list has an END instruction at the
+            // end, so subtract one for that. We assume that we want to synthesize a function that
+            // simply returns a value without any control flow.
+            instrs: vec![Instruction::Nop; len - 1],
             constants,
         }
     }
@@ -199,7 +202,12 @@ impl CandidateFunc {
             .map(|typ| Local::new(1, *typ))
             .collect();
 
-        FuncBody::new(locals, Instructions::new(self.instrs.clone()))
+        // NOTE(taegyunkim): As commented in the constructor we need to append an END instruction,
+        // to make this a valid function representation.
+        let mut instrs = self.instrs.clone();
+        instrs.push(Instruction::End);
+
+        FuncBody::new(locals, Instructions::new(instrs))
     }
 
     pub fn to_module(&self) -> Module {

@@ -133,7 +133,6 @@ impl Transform {
             WhitelistedInstruction::I32ShrU => WhitelistedInstruction::I32ShrU,
             WhitelistedInstruction::I32Rotl => WhitelistedInstruction::I32Rotl,
             WhitelistedInstruction::I32Rotr => WhitelistedInstruction::I32Rotr,
-            WhitelistedInstruction::End => WhitelistedInstruction::End,
             WhitelistedInstruction::Nop => WhitelistedInstruction::Nop,
             WhitelistedInstruction::I32Const(_) => {
                 WhitelistedInstruction::I32Const(candidate_func.sample_i32(rng))

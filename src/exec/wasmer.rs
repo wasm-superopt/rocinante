@@ -100,6 +100,12 @@ impl Interpreter for Wasmer {
             })
             .collect();
 
+        // NOTE(taegyunkim): It's possible that the verifier finds the same counterexample, avoid
+        // adding the same one.
+        if self.test_cases.iter().find(|&(i, _)| *i == input) != None {
+            return;
+        }
+
         let output = func.call(&input);
 
         self.test_cases.push((input, output));
