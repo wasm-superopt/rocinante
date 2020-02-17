@@ -88,10 +88,31 @@ pub fn build_module(func_name: &str, func_type: &FunctionType, func_body: FuncBo
 }
 
 #[cfg(test)]
+fn build_module_empty_body(func_name: &str, func_type: &FunctionType) -> Module {
+    #[rustfmt::skip]
+    let module = parity_wasm::builder::module()
+        .export()
+            .field(func_name)
+            .internal()
+            .func(0)
+            .build()
+        .function()
+            .signature()
+                .with_params(func_type.params().to_vec())
+                .with_return_type(func_type.return_type())
+                .build()
+            .build()
+        .build();
+
+    module
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::debug;
     use parity_wasm::elements::{Instruction, Instructions, ValueType};
+    use parity_wasm::serialize;
 
     fn instantiate(module: parity_wasm::elements::Module) -> wasmi::ModuleRef {
         let module =
@@ -127,5 +148,33 @@ mod tests {
                 .expect("failed to execute the function"),
             Some(wasmi::RuntimeValue::I32(6))
         );
+    }
+
+    #[test]
+    fn build_module_empty() {
+        let func_type = FunctionType::new(vec![ValueType::I32], Some(ValueType::I32));
+        let func_body = FuncBody::new(vec![], Instructions::new(vec![]));
+
+        let empty = build_module("candidate", &func_type, func_body.clone());
+
+        let add_body = FuncBody::new(
+            vec![],
+            Instructions::new(vec![
+                Instruction::GetLocal(0),
+                Instruction::GetLocal(0),
+                Instruction::I32Add,
+                Instruction::End,
+            ]),
+        );
+
+        let add = build_module("candidate", &func_type, add_body.clone());
+
+        println!("{:?}", empty.to_bytes().unwrap());
+        println!("{:?}", serialize::<FuncBody>(func_body).unwrap());
+        println!("{:?}", add.to_bytes().unwrap());
+        println!("{:?}", serialize::<FuncBody>(add_body).unwrap());
+
+        let empty_body = build_module_empty_body("candidate", &func_type);
+        println!("{:?}", empty_body.to_bytes().unwrap());
     }
 }
