@@ -1,10 +1,10 @@
 use self::transform::*;
 use crate::exec::InterpreterKind;
 use crate::{debug, exec, parity_wasm_utils, solver, Algorithm};
+use parity_wasm::elements::serialize;
 use parity_wasm::elements::{
     FuncBody, FunctionType, Instruction, Instructions, Internal, Local, Module, ValueType,
 };
-use parity_wasm::serialize;
 use rand::distributions::{Bernoulli, Distribution};
 use rand::seq::SliceRandom;
 use rand::Rng;
@@ -61,15 +61,14 @@ impl Superoptimizer {
                     func_body.code().elements().len(),
                     constants.clone(),
                 );
-                let mut curr_cost = interpreter.eval_test_cases(&candidate_func.to_bytes());
+                let mut curr_cost = interpreter.eval_test_cases(&candidate_func.get_binary());
                 loop {
-                    let module = candidate_func.to_module();
-                    debug::print_functions(&module);
-
                     if curr_cost == 0 {
                         match z3solver.verify(&candidate_func.to_func_body()) {
                             solver::VerifyResult::Verified => {
                                 println!("Verified.");
+                                let module = candidate_func.to_module();
+                                debug::print_functions(&module);
 
                                 break;
                             }
@@ -83,7 +82,7 @@ impl Superoptimizer {
 
                     let transform = rng.gen::<Transform>();
                     let transform_info = transform.operate(rng, &mut candidate_func);
-                    let new_cost = interpreter.eval_test_cases(&candidate_func.to_bytes());
+                    let new_cost = interpreter.eval_test_cases(&candidate_func.get_binary());
 
                     #[cfg(debug_assertions)]
                     println!("curr_cost: {}, new_cost: {}", curr_cost, new_cost);
@@ -130,6 +129,7 @@ pub struct CandidateFunc {
     instrs: Vec<Instruction>,
     constants: Vec<i32>,
     binary: Vec<u8>,
+    binary_len: usize,
 }
 
 impl CandidateFunc {
@@ -144,6 +144,7 @@ impl CandidateFunc {
 
         binary = binary[0..binary.len() - 4].to_vec();
         binary.reserve(len);
+        let binary_len = binary.len();
 
         Self {
             func_type: func_type.clone(),
@@ -154,6 +155,7 @@ impl CandidateFunc {
             instrs: vec![Instruction::Nop; len - 1],
             constants,
             binary,
+            binary_len,
         }
     }
 
@@ -225,15 +227,25 @@ impl CandidateFunc {
         parity_wasm_utils::build_module("candidate", &self.func_type, self.to_func_body())
     }
 
-    pub fn to_bytes(&self) -> Vec<u8> {
-        self.binary
-            .clone()
-            .into_iter()
-            .chain(
-                serialize::<FuncBody>(self.to_func_body())
-                    .unwrap()
-                    .into_iter(),
-            )
-            .collect()
+    pub fn get_binary(&mut self) -> &[u8] {
+        let func_binary = serialize::<FuncBody>(self.to_func_body()).unwrap();
+        let mut ptr = self.binary.as_mut_ptr();
+        unsafe {
+            ptr = ptr.add(self.binary_len);
+            let func_binary_len = func_binary.len();
+            *ptr = func_binary_len as u8 + 1;
+            ptr = ptr.add(1);
+            *ptr = 1;
+            ptr = ptr.add(1);
+
+            for (i, item) in func_binary.into_iter().enumerate() {
+                *ptr.add(i) = item;
+            }
+
+            self.binary.set_len(self.binary_len + 2 + func_binary_len);
+        }
+
+        //assert_eq!(self.binary, self.to_module().to_bytes().unwrap());
+        &self.binary
     }
 }
