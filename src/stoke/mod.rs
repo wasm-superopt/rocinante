@@ -4,6 +4,7 @@ use crate::{debug, exec, parity_wasm_utils, solver, Algorithm};
 use parity_wasm::elements::{
     FuncBody, FunctionType, Instruction, Instructions, Internal, Local, Module, ValueType,
 };
+use parity_wasm::serialize;
 use rand::distributions::{Bernoulli, Distribution};
 use rand::seq::SliceRandom;
 use rand::Rng;
@@ -60,18 +61,16 @@ impl Superoptimizer {
                     func_body.code().elements().len(),
                     constants.clone(),
                 );
-                let mut module = candidate_func.to_module();
-                let mut curr_cost =
-                    interpreter.eval_test_cases(&module.clone().to_bytes().unwrap());
+                let mut curr_cost = interpreter.eval_test_cases(&candidate_func.to_bytes());
                 loop {
-                    #[cfg(debug_assertions)]
+                    let module = candidate_func.to_module();
                     debug::print_functions(&module);
 
                     if curr_cost == 0 {
                         match z3solver.verify(&candidate_func.to_func_body()) {
                             solver::VerifyResult::Verified => {
                                 println!("Verified.");
-                                debug::print_functions(&module);
+
                                 break;
                             }
                             solver::VerifyResult::CounterExample(values) => {
@@ -84,9 +83,7 @@ impl Superoptimizer {
 
                     let transform = rng.gen::<Transform>();
                     let transform_info = transform.operate(rng, &mut candidate_func);
-
-                    module = candidate_func.to_module();
-                    let new_cost = interpreter.eval_test_cases(&module.clone().to_bytes().unwrap());
+                    let new_cost = interpreter.eval_test_cases(&candidate_func.to_bytes());
 
                     #[cfg(debug_assertions)]
                     println!("curr_cost: {}, new_cost: {}", curr_cost, new_cost);
@@ -132,10 +129,22 @@ pub struct CandidateFunc {
     local_types: Vec<ValueType>,
     instrs: Vec<Instruction>,
     constants: Vec<i32>,
+    binary: Vec<u8>,
 }
 
 impl CandidateFunc {
     pub fn new(func_type: &FunctionType, len: usize, constants: Vec<i32>) -> Self {
+        let mut binary = parity_wasm_utils::build_module(
+            "candidate",
+            &func_type,
+            FuncBody::new(vec![], Instructions::new(vec![])),
+        )
+        .to_bytes()
+        .unwrap();
+
+        binary = binary[0..binary.len() - 4].to_vec();
+        binary.reserve(len);
+
         Self {
             func_type: func_type.clone(),
             local_types: Vec::new(),
@@ -144,6 +153,7 @@ impl CandidateFunc {
             // simply returns a value without any control flow.
             instrs: vec![Instruction::Nop; len - 1],
             constants,
+            binary,
         }
     }
 
@@ -213,5 +223,17 @@ impl CandidateFunc {
 
     pub fn to_module(&self) -> Module {
         parity_wasm_utils::build_module("candidate", &self.func_type, self.to_func_body())
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.binary
+            .clone()
+            .into_iter()
+            .chain(
+                serialize::<FuncBody>(self.to_func_body())
+                    .unwrap()
+                    .into_iter(),
+            )
+            .collect()
     }
 }
