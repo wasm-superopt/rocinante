@@ -242,7 +242,8 @@ impl CandidateFunc {
         self.binary.extend(&[func_binary.len() as u8 + 1, 1]);
         self.binary.extend(func_binary);
 
-        // assert_eq!(self.binary, self.to_module().to_bytes().unwrap());
+        // TODO(taegyunkim): Add a test.
+        //assert_eq!(self.binary, self.to_module().to_bytes().unwrap());
         &self.binary
     }
 }
