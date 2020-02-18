@@ -128,4 +128,19 @@ mod tests {
             Some(wasmi::RuntimeValue::I32(6))
         );
     }
+
+    #[test]
+    fn build_module_empty() {
+        let func_type = FunctionType::new(vec![ValueType::I32], Some(ValueType::I32));
+        let func_body = FuncBody::new(vec![], Instructions::new(vec![]));
+
+        let module = build_module("candidate", &func_type, func_body.clone());
+
+        let expected_binary: Vec<u8> = vec![
+            0, 97, 115, 109, 1, 0, 0, 0, 1, 6, 1, 96, 1, 127, 1, 127, 3, 2, 1, 0, 7, 13, 1, 9, 99,
+            97, 110, 100, 105, 100, 97, 116, 101, 0, 0, 10, 3, 1, 1, 0,
+        ];
+
+        assert_eq!(module.to_bytes().unwrap(), expected_binary);
+    }
 }

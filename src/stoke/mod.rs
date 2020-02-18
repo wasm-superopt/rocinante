@@ -1,6 +1,7 @@
 use self::transform::*;
 use crate::exec::InterpreterKind;
 use crate::{debug, exec, parity_wasm_utils, solver, Algorithm};
+use parity_wasm::elements::serialize;
 use parity_wasm::elements::{
     FuncBody, FunctionType, Instruction, Instructions, Internal, Local, Module, ValueType,
 };
@@ -60,18 +61,15 @@ impl Superoptimizer {
                     func_body.code().elements().len(),
                     constants.clone(),
                 );
-                let mut module = candidate_func.to_module();
-                let mut curr_cost =
-                    interpreter.eval_test_cases(&module.clone().to_bytes().unwrap());
+                let mut curr_cost = interpreter.eval_test_cases(&candidate_func.get_binary());
                 loop {
-                    #[cfg(debug_assertions)]
-                    debug::print_functions(&module);
-
                     if curr_cost == 0 {
                         match z3solver.verify(&candidate_func.to_func_body()) {
                             solver::VerifyResult::Verified => {
                                 println!("Verified.");
+                                let module = candidate_func.to_module();
                                 debug::print_functions(&module);
+
                                 break;
                             }
                             solver::VerifyResult::CounterExample(values) => {
@@ -84,9 +82,7 @@ impl Superoptimizer {
 
                     let transform = rng.gen::<Transform>();
                     let transform_info = transform.operate(rng, &mut candidate_func);
-
-                    module = candidate_func.to_module();
-                    let new_cost = interpreter.eval_test_cases(&module.clone().to_bytes().unwrap());
+                    let new_cost = interpreter.eval_test_cases(&candidate_func.get_binary());
 
                     #[cfg(debug_assertions)]
                     println!("curr_cost: {}, new_cost: {}", curr_cost, new_cost);
@@ -132,10 +128,32 @@ pub struct CandidateFunc {
     local_types: Vec<ValueType>,
     instrs: Vec<Instruction>,
     constants: Vec<i32>,
+    /// This field contains WASM binary generated from above func_type, with function name
+    /// 'candidate'. It is initialized once when this struct is initialized and reused to avoid
+    /// multiple conversions to binary format which are costly.
+    binary: Vec<u8>,
+    binary_len: usize,
 }
 
 impl CandidateFunc {
     pub fn new(func_type: &FunctionType, len: usize, constants: Vec<i32>) -> Self {
+        let mut binary = parity_wasm_utils::build_module(
+            "candidate",
+            &func_type,
+            FuncBody::new(vec![], Instructions::new(vec![])),
+        )
+        .to_bytes()
+        .unwrap();
+
+        // The last four bytes represent the code section of WASM, and always have 3, 1, 1, 0,
+        // The value 3 represents the length of the sequence of bytes that follows, and the first
+        // 1 means that there is one function. The last two bytes actually represent the function,
+        // which can be translated to Nop, and Unreachable.
+        binary = binary[0..binary.len() - 4].to_vec();
+        // Reserve space ahead to avoid expensive memory operations during search.
+        binary.reserve(2 + len);
+        let binary_len = binary.len();
+
         Self {
             func_type: func_type.clone(),
             local_types: Vec::new(),
@@ -144,6 +162,8 @@ impl CandidateFunc {
             // simply returns a value without any control flow.
             instrs: vec![Instruction::Nop; len - 1],
             constants,
+            binary,
+            binary_len,
         }
     }
 
@@ -213,5 +233,17 @@ impl CandidateFunc {
 
     pub fn to_module(&self) -> Module {
         parity_wasm_utils::build_module("candidate", &self.func_type, self.to_func_body())
+    }
+
+    pub fn get_binary(&mut self) -> &[u8] {
+        let func_binary = serialize::<FuncBody>(self.to_func_body()).unwrap();
+
+        self.binary.truncate(self.binary_len);
+        self.binary.extend(&[func_binary.len() as u8 + 1, 1]);
+        self.binary.extend(func_binary);
+
+        // TODO(taegyunkim): Add a test.
+        //assert_eq!(self.binary, self.to_module().to_bytes().unwrap());
+        &self.binary
     }
 }
