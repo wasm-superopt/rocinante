@@ -75,8 +75,9 @@ impl Superoptimizer {
                                 break;
                             }
                             solver::VerifyResult::CounterExample(values) => {
-                                println!("Adding new examples: {:?}", values);
-                                interpreter.add_test_case(&values);
+                                if interpreter.add_test_case(&values) {
+                                    println!("Added new test case {:?}", values);
+                                }
                             }
                         }
                     }

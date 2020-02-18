@@ -24,7 +24,7 @@ impl Wasmer {
         for _ in 0..NUM_TEST_CASES {
             inputs.push(gen_random_input(func.signature().params()));
         }
-        let outputs = invoke_with_inputs(&func, &inputs);
+        let outputs: Vec<Output> = inputs.iter().map(|input| func.call(input)).collect();
         let test_cases = inputs.into_iter().zip(outputs.into_iter()).collect();
 
         let return_type = func.signature().params();
@@ -89,7 +89,7 @@ impl Interpreter for Wasmer {
         dist
     }
 
-    fn add_test_case(&mut self, wasmi_input: &[::wasmi::RuntimeValue]) {
+    fn add_test_case(&mut self, wasmi_input: &[::wasmi::RuntimeValue]) -> bool {
         let func = self.instance.dyn_func(&self.func_name).unwrap();
 
         let input: Vec<Value> = wasmi_input
@@ -103,12 +103,12 @@ impl Interpreter for Wasmer {
         // NOTE(taegyunkim): It's possible that the verifier finds the same counterexample, avoid
         // adding the same one.
         if self.test_cases.iter().find(|&(i, _)| *i == input) != None {
-            return;
+            return false;
         }
 
         let output = func.call(&input);
-
         self.test_cases.push((input, output));
+        true
     }
 }
 
@@ -165,8 +165,4 @@ fn gen_random_input(param_types: &[types::Type]) -> Input {
     }
 
     inputs
-}
-
-fn invoke_with_inputs(func: &DynFunc, inputs: &[Input]) -> Vec<Output> {
-    inputs.iter().map(|input| func.call(input)).collect()
 }

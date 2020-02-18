@@ -23,7 +23,7 @@ pub trait Interpreter {
     // rust will panic.
     fn eval_test_cases(&self, candidate: &[u8]) -> u32;
 
-    fn add_test_case(&mut self, input: &[::wasmi::RuntimeValue]);
+    fn add_test_case(&mut self, input: &[::wasmi::RuntimeValue]) -> bool;
 }
 
 pub fn get_interpreter(

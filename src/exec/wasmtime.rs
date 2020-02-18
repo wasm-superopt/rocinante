@@ -32,7 +32,7 @@ impl Wasmtime {
         for _ in 0..NUM_TEST_CASES {
             inputs.push(gen_random_input(func.r#type().params()));
         }
-        let outputs = invoke_with_inputs(&func, &inputs);
+        let outputs: Vec<Output> = inputs.iter().map(|input| func.call(input)).collect();
         let test_cases = inputs.into_iter().zip(outputs.into_iter()).collect();
 
         let return_type = func.r#type().results();
@@ -57,6 +57,15 @@ impl Wasmtime {
             func_name: String::from(func_name),
             test_cases,
             return_type_bits,
+        }
+    }
+}
+
+fn eq(val1: &Val, val2: &Val) -> bool {
+    match (val1, val2) {
+        (Val::I32(x), Val::I32(y)) => x == y,
+        _ => {
+            panic!("eq unimplemented");
         }
     }
 }
@@ -95,7 +104,7 @@ impl Interpreter for Wasmtime {
         dist
     }
 
-    fn add_test_case(&mut self, wasmi_input: &[::wasmi::RuntimeValue]) {
+    fn add_test_case(&mut self, wasmi_input: &[::wasmi::RuntimeValue]) -> bool {
         let func = self
             .instance
             .find_export_by_name(&self.func_name)
@@ -104,7 +113,7 @@ impl Interpreter for Wasmtime {
             .unwrap()
             .borrow();
 
-        let input: Vec<Val> = wasmi_input
+        let new_input: Vec<Val> = wasmi_input
             .iter()
             .map(|i| match i {
                 ::wasmi::RuntimeValue::I32(x) => Val::I32(*x),
@@ -112,9 +121,27 @@ impl Interpreter for Wasmtime {
             })
             .collect();
 
-        let output = func.call(&input);
+        // Want to check whether new_input already exists in the list of test cases. The Val struct
+        // doesn't implement PartialEq, so we use a helper function eq iterating over each element.
+        for (test_input, _) in self.test_cases.iter() {
+            #[cfg(debug_assertions)]
+            assert_eq!(test_input.len(), new_input.len());
 
-        self.test_cases.push((input, output));
+            let mut i = 0;
+            while i < test_input.len() {
+                if !eq(&test_input[i], &new_input[i]) {
+                    break;
+                }
+                i += 1;
+            }
+            if i == test_input.len() {
+                return false;
+            }
+        }
+
+        let output = func.call(&new_input);
+        self.test_cases.push((new_input, output));
+        true
     }
 }
 
@@ -130,10 +157,6 @@ fn gen_random_input(param_types: &[ValType]) -> Input {
         input.push(arg);
     }
     input
-}
-
-fn invoke_with_inputs(func: &std::cell::Ref<Func>, inputs: &[Input]) -> Vec<Output> {
-    inputs.iter().map(|input| func.call(input)).collect()
 }
 
 fn hamming_distance(output1: &Output, output2: &Output) -> u32 {
