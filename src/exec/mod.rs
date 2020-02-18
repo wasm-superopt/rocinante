@@ -24,6 +24,8 @@ pub trait Interpreter {
     fn eval_test_cases(&self, candidate: &[u8]) -> u32;
 
     fn add_test_case(&mut self, input: &[::wasmi::RuntimeValue]) -> bool;
+
+    fn return_bit_width(&self) -> u32;
 }
 
 pub fn get_interpreter(

@@ -110,6 +110,10 @@ impl Interpreter for Wasmer {
         self.test_cases.push((input, output));
         true
     }
+
+    fn return_bit_width(&self) -> u32 {
+        self.return_type_bits.iter().sum()
+    }
 }
 
 fn hamming_distance(output1: &Output, output2: &Output) -> u32 {

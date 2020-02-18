@@ -73,7 +73,8 @@ impl Superoptimizer {
                             }
                             solver::VerifyResult::CounterExample(values) => {
                                 if interpreter.add_test_case(&values) {
-                                    println!("Added new test case {:?}", values);
+                                    println!("Added a new test case {:?}", values);
+                                    curr_cost = interpreter.return_bit_width();
                                 }
                             }
                         }
