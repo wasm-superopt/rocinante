@@ -89,7 +89,7 @@ impl Interpreter for Wasmer {
         dist
     }
 
-    fn add_test_case(&mut self, wasmi_input: &[::wasmi::RuntimeValue]) -> bool {
+    fn add_test_case(&mut self, wasmi_input: &[::wasmi::RuntimeValue]) {
         let func = self.instance.dyn_func(&self.func_name).unwrap();
 
         let input: Vec<Value> = wasmi_input
@@ -100,15 +100,8 @@ impl Interpreter for Wasmer {
             })
             .collect();
 
-        // NOTE(taegyunkim): It's possible that the verifier finds the same counterexample, avoid
-        // adding the same one.
-        if self.test_cases.iter().find(|&(i, _)| *i == input) != None {
-            return false;
-        }
-
         let output = func.call(&input);
         self.test_cases.push((input, output));
-        true
     }
 
     fn return_bit_width(&self) -> u32 {
