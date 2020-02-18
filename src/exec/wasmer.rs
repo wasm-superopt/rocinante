@@ -166,3 +166,34 @@ fn gen_random_input(param_types: &[types::Type]) -> Input {
 
     inputs
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn sanity_test() {
+        let binary =
+            wat::parse_file("./examples/hackers_delight/p7.wat").expect("Failed to parse .wat");
+        let mut interpreter = Wasmer::new(&binary, "p7");
+        interpreter.add_test_case(&[::wasmi::RuntimeValue::I32(2147483647)]);
+
+        let candidate = wabt::wat2wasm(
+            r#"(module
+                (func $p7 (export "p7") (param i32) (result i32)
+                  i32.const -1
+                  local.get 0
+                  i32.const -2
+                  local.get 0
+                  i32.sub
+                  i32.or
+                  i32.rem_u
+                )
+              )"#,
+        )
+        .expect("Failed to convert to binary");
+
+        let cost = interpreter.eval_test_cases(&candidate);
+        println!("{}", cost);
+        assert_ne!(cost, 0);
+    }
+}

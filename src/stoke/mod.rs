@@ -69,16 +69,11 @@ impl Superoptimizer {
                                 println!("Verified.");
                                 let module = candidate_func.to_module();
                                 debug::print_functions(&module);
-
                                 break;
                             }
                             solver::VerifyResult::CounterExample(values) => {
                                 if interpreter.add_test_case(&values) {
                                     println!("Added new test case {:?}", values);
-                                } else {
-                                    let module = candidate_func.to_module();
-                                    debug::print_functions(&module);
-                                    panic!("Existing test case returned {:?}", values);
                                 }
                             }
                         }
