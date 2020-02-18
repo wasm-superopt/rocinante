@@ -128,6 +128,9 @@ pub struct CandidateFunc {
     local_types: Vec<ValueType>,
     instrs: Vec<Instruction>,
     constants: Vec<i32>,
+    /// This field contains WASM binary generated from above func_type, with function name
+    /// 'candidate'. It is initialized once when this struct is initialized and reused to avoid
+    /// multiple conversions to binary format which are costly.
     binary: Vec<u8>,
     binary_len: usize,
 }
@@ -142,8 +145,13 @@ impl CandidateFunc {
         .to_bytes()
         .unwrap();
 
+        // The last four bytes represent the code section of WASM, and always have 3, 1, 1, 0,
+        // The value 3 represents the length of the sequence of bytes that follows, and the first
+        // 1 means that there is one function. The last two bytes actually represent the function,
+        // which can be translated to Nop, and Unreachable.
         binary = binary[0..binary.len() - 4].to_vec();
-        binary.reserve(len);
+        // Reserve space ahead to avoid expensive memory operations during search.
+        binary.reserve(2 + len);
         let binary_len = binary.len();
 
         Self {
@@ -229,23 +237,12 @@ impl CandidateFunc {
 
     pub fn get_binary(&mut self) -> &[u8] {
         let func_binary = serialize::<FuncBody>(self.to_func_body()).unwrap();
-        let mut ptr = self.binary.as_mut_ptr();
-        unsafe {
-            ptr = ptr.add(self.binary_len);
-            let func_binary_len = func_binary.len();
-            *ptr = func_binary_len as u8 + 1;
-            ptr = ptr.add(1);
-            *ptr = 1;
-            ptr = ptr.add(1);
 
-            for (i, item) in func_binary.into_iter().enumerate() {
-                *ptr.add(i) = item;
-            }
+        self.binary.truncate(self.binary_len);
+        self.binary.extend(&[func_binary.len() as u8 + 1, 1]);
+        self.binary.extend(func_binary);
 
-            self.binary.set_len(self.binary_len + 2 + func_binary_len);
-        }
-
-        //assert_eq!(self.binary, self.to_module().to_bytes().unwrap());
+        // assert_eq!(self.binary, self.to_module().to_bytes().unwrap());
         &self.binary
     }
 }
