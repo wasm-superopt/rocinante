@@ -64,17 +64,19 @@ impl Superoptimizer {
                 let mut curr_cost = interpreter.eval_test_cases(&candidate_func.get_binary());
                 loop {
                     if curr_cost == 0 {
+                        let module = candidate_func.to_module();
+                        debug::print_functions(&module);
                         match z3solver.verify(&candidate_func.to_func_body()) {
                             solver::VerifyResult::Verified => {
                                 println!("Verified.");
-                                let module = candidate_func.to_module();
-                                debug::print_functions(&module);
                                 break;
                             }
                             solver::VerifyResult::CounterExample(values) => {
                                 if interpreter.add_test_case(&values) {
                                     println!("Added a new test case {:?}", values);
                                     curr_cost = interpreter.return_bit_width();
+                                } else {
+                                    panic!("Found existing test case {:?}", values);
                                 }
                             }
                         }
