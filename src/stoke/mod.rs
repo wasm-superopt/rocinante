@@ -74,6 +74,8 @@ impl Superoptimizer {
                             solver::VerifyResult::CounterExample(values) => {
                                 if interpreter.add_test_case(&values) {
                                     println!("Added a new test case {:?}", values);
+                                    // Verifier finds one counterexample for now, so we update the
+                                    // cost to be the number of bits for return value type.
                                     curr_cost = interpreter.return_bit_width();
                                 } else {
                                     panic!("Found existing test case {:?}", values);
