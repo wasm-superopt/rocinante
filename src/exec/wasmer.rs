@@ -24,7 +24,7 @@ impl Wasmer {
         for _ in 0..NUM_TEST_CASES {
             inputs.push(gen_random_input(func.signature().params()));
         }
-        let outputs = invoke_with_inputs(&func, &inputs);
+        let outputs: Vec<Output> = inputs.iter().map(|input| func.call(input)).collect();
         let test_cases = inputs.into_iter().zip(outputs.into_iter()).collect();
 
         let return_type = func.signature().params();
@@ -165,8 +165,4 @@ fn gen_random_input(param_types: &[types::Type]) -> Input {
     }
 
     inputs
-}
-
-fn invoke_with_inputs(func: &DynFunc, inputs: &[Input]) -> Vec<Output> {
-    inputs.iter().map(|input| func.call(input)).collect()
 }

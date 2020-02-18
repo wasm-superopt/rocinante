@@ -32,7 +32,7 @@ impl Wasmtime {
         for _ in 0..NUM_TEST_CASES {
             inputs.push(gen_random_input(func.r#type().params()));
         }
-        let outputs = invoke_with_inputs(&func, &inputs);
+        let outputs: Vec<Output> = inputs.iter().map(|input| func.call(input)).collect();
         let test_cases = inputs.into_iter().zip(outputs.into_iter()).collect();
 
         let return_type = func.r#type().results();
@@ -157,10 +157,6 @@ fn gen_random_input(param_types: &[ValType]) -> Input {
         input.push(arg);
     }
     input
-}
-
-fn invoke_with_inputs(func: &std::cell::Ref<Func>, inputs: &[Input]) -> Vec<Output> {
-    inputs.iter().map(|input| func.call(input)).collect()
 }
 
 fn hamming_distance(output1: &Output, output2: &Output) -> u32 {
