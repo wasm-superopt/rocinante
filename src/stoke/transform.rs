@@ -201,6 +201,7 @@ mod test {
 
         let original = CandidateFunc::new(
             &FunctionType::new(vec![ValueType::I32], Some(ValueType::I32)),
+            &[],
             4,
             vec![-2, -1, 0, 1, 2],
         );
@@ -227,6 +228,7 @@ mod test {
 
         let original = CandidateFunc::new(
             &FunctionType::new(vec![ValueType::I32], Some(ValueType::I32)),
+            &[],
             5,
             vec![-2, -1, 0, 1, 2],
         );
@@ -253,6 +255,7 @@ mod test {
 
         let original = CandidateFunc::new(
             &FunctionType::new(vec![ValueType::I32], Some(ValueType::I32)),
+            &[],
             6,
             vec![-2, -1, 0, 1, 2],
         );
