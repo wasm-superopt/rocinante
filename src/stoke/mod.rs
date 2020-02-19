@@ -58,6 +58,7 @@ impl Superoptimizer {
 
                 let mut candidate_func = CandidateFunc::new(
                     func_type,
+                    func_body.locals(),
                     func_body.code().elements().len(),
                     constants.clone(),
                 );
@@ -137,7 +138,12 @@ pub struct CandidateFunc {
 }
 
 impl CandidateFunc {
-    pub fn new(func_type: &FunctionType, len: usize, constants: Vec<i32>) -> Self {
+    pub fn new(
+        func_type: &FunctionType,
+        locals: &[Local],
+        len: usize,
+        constants: Vec<i32>,
+    ) -> Self {
         let mut binary = parity_wasm_utils::build_module(
             "candidate",
             &func_type,
@@ -155,9 +161,17 @@ impl CandidateFunc {
         binary.reserve(2 + len);
         let binary_len = binary.len();
 
+        // Keep track of the local types of the spec.
+        let mut local_types = Vec::new();
+        for l in locals {
+            for _ in 0..l.count() {
+                local_types.push(l.value_type());
+            }
+        }
+
         Self {
             func_type: func_type.clone(),
-            local_types: Vec::new(),
+            local_types,
             // NOTE(taegyunkim): The original spec instruction list has an END instruction at the
             // end, so subtract one for that. We assume that we want to synthesize a function that
             // simply returns a value without any control flow.
@@ -178,7 +192,7 @@ impl CandidateFunc {
         let typ: &ValueType = if i < self.func_type.params().len() {
             &self.func_type.params()[i]
         } else if i < self.func_type.params().len() + self.local_types.len() {
-            &self.local_types[i]
+            &self.local_types[i - self.func_type.params().len()]
         } else {
             panic!("local index out of bounds: {}", i);
         };
@@ -218,6 +232,7 @@ impl CandidateFunc {
     }
 
     pub fn to_func_body(&self) -> FuncBody {
+        // TODO(taegyunkim): For candidate programs that don't use locals, this can be removed.
         let locals: Vec<Local> = self
             .local_types
             .iter()
@@ -237,6 +252,7 @@ impl CandidateFunc {
     }
 
     pub fn get_binary(&mut self) -> &[u8] {
+        // TODO(taegyunkim): Avoid conversion to FuncBody and convert instruction list to binary.
         let func_binary = serialize::<FuncBody>(self.to_func_body()).unwrap();
 
         self.binary.truncate(self.binary_len);
