@@ -113,7 +113,7 @@ fn main() {
         let module = Module::from_bytes(&binary).expect("Failed to deserialize.");
 
         // TODO(taegyunkim): Get this from commandline.
-        let constants = vec![-2, -1, 0, 1, 2, 3];
+        let constants = vec![-2, -1, 0, 1, 2];
         if let Some(_matches) = matches.subcommand_matches("print") {
             debug::print_functions(&module);
         } else {
