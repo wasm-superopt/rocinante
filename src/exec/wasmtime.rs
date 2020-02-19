@@ -119,6 +119,10 @@ impl Interpreter for Wasmtime {
     fn return_bit_width(&self) -> u32 {
         self.return_type_bits.iter().sum()
     }
+
+    fn num_test_cases(&self) -> usize {
+        self.test_cases.len()
+    }
 }
 
 fn gen_random_input(param_types: &[ValType]) -> Input {

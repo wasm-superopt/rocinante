@@ -62,7 +62,11 @@ impl Superoptimizer {
                     func_body.code().elements().len(),
                     constants.clone(),
                 );
-                let mut curr_cost = interpreter.eval_test_cases(&candidate_func.get_binary());
+                let mut curr_cost = if candidate_func.stack_cnt() == 1 {
+                    interpreter.eval_test_cases(&candidate_func.get_binary())
+                } else {
+                    interpreter.num_test_cases() as u32 * (32 + 1)
+                };
                 loop {
                     if curr_cost == 0 {
                         let module = candidate_func.to_module();
@@ -84,7 +88,11 @@ impl Superoptimizer {
 
                     let transform = rng.gen::<Transform>();
                     let transform_info = transform.operate(rng, &mut candidate_func);
-                    let new_cost = interpreter.eval_test_cases(&candidate_func.get_binary());
+                    let new_cost = if candidate_func.stack_cnt() == 1 {
+                        interpreter.eval_test_cases(&candidate_func.get_binary())
+                    } else {
+                        interpreter.num_test_cases() as u32 * (32 + 1)
+                    };
 
                     #[cfg(debug_assertions)]
                     println!("curr_cost: {}, new_cost: {}", curr_cost, new_cost);
@@ -129,6 +137,7 @@ pub struct CandidateFunc {
     func_type: FunctionType,
     local_types: Vec<ValueType>,
     instrs: Vec<Instruction>,
+    stack_cnt: i32,
     constants: Vec<i32>,
     /// This field contains WASM binary generated from above func_type, with function name
     /// 'candidate'. It is initialized once when this struct is initialized and reused to avoid
@@ -176,10 +185,23 @@ impl CandidateFunc {
             // end, so subtract one for that. We assume that we want to synthesize a function that
             // simply returns a value without any control flow.
             instrs: vec![Instruction::Nop; len - 1],
+            stack_cnt: 0,
             constants,
             binary,
             binary_len,
         }
+    }
+
+    pub fn inc_stack_cnt(&mut self, n: i32) {
+        self.stack_cnt += n;
+    }
+
+    pub fn dec_stack_cnt(&mut self, n: i32) {
+        self.stack_cnt -= n;
+    }
+
+    pub fn stack_cnt(&self) -> i32 {
+        self.stack_cnt
     }
 
     pub fn get_rand_instr<R: Rng + ?Sized>(&self, rng: &mut R) -> (usize, Instruction) {
