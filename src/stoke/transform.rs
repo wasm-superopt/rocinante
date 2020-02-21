@@ -42,6 +42,31 @@ impl Distribution<Transform> for Standard {
     }
 }
 
+pub fn stack_cnt(instr: &Instruction) -> i32 {
+    match *instr {
+        Instruction::I32Add
+        | Instruction::I32Sub
+        | Instruction::I32Mul
+        | Instruction::I32DivS
+        | Instruction::I32DivU
+        | Instruction::I32RemS
+        | Instruction::I32RemU
+        | Instruction::I32And
+        | Instruction::I32Or
+        | Instruction::I32Xor
+        | Instruction::I32Shl
+        | Instruction::I32ShrS
+        | Instruction::I32ShrU
+        | Instruction::I32Rotl
+        | Instruction::I32Rotr => -1,
+        Instruction::I32Const(_) | Instruction::GetLocal(_) => 1,
+        Instruction::SetLocal(_) => -1,
+        Instruction::TeeLocal(_) => 1,
+        Instruction::Nop => 0,
+        _ => panic!("instruction {}, unimplemented", instr),
+    }
+}
+
 impl Transform {
     pub fn new(kind: TransformKind) -> Self {
         Self { kind }
@@ -67,6 +92,12 @@ impl Transform {
     pub fn undo(&self, transform_info: &TransformInfo, candidate_func: &mut CandidateFunc) {
         match transform_info.kind {
             TransformKind::Opcode | TransformKind::Operand | TransformKind::Instruction => {
+                let current_instr =
+                    candidate_func.instrs_mut()[transform_info.undo_indices[0]].clone();
+
+                candidate_func.dec_stack_cnt(stack_cnt(&current_instr));
+                candidate_func.inc_stack_cnt(stack_cnt(&transform_info.undo_instr));
+
                 candidate_func.instrs_mut()[transform_info.undo_indices[0]] =
                     transform_info.undo_instr.clone();
             }
@@ -85,10 +116,12 @@ impl Transform {
         candidate_func: &mut CandidateFunc,
     ) -> TransformInfo {
         let (idx, undo_instr) = candidate_func.get_rand_instr(rng);
-        let instrs = candidate_func.instrs_mut();
-
         let new_instr = whitelist::get_equiv_instr(rng, &undo_instr);
 
+        candidate_func.dec_stack_cnt(stack_cnt(&undo_instr));
+        candidate_func.inc_stack_cnt(stack_cnt(&new_instr));
+
+        let instrs = candidate_func.instrs_mut();
         instrs[idx] = new_instr.clone();
 
         TransformInfo {
@@ -140,6 +173,9 @@ impl Transform {
         }
         .into();
 
+        candidate_func.dec_stack_cnt(stack_cnt(&undo_instr));
+        candidate_func.inc_stack_cnt(stack_cnt(&new_instr));
+
         let instrs = candidate_func.instrs_mut();
         instrs[instr_idx] = new_instr.clone();
 
@@ -175,8 +211,11 @@ impl Transform {
         candidate_func: &mut CandidateFunc,
     ) -> TransformInfo {
         let (instr_idx, undo_instr) = candidate_func.get_rand_instr(rng);
-
         let new_instr: Instruction = WhitelistedInstruction::sample(rng, candidate_func).into();
+
+        candidate_func.dec_stack_cnt(stack_cnt(&undo_instr));
+        candidate_func.inc_stack_cnt(stack_cnt(&new_instr));
+
         let instrs = candidate_func.instrs_mut();
         instrs[instr_idx] = new_instr.clone();
 

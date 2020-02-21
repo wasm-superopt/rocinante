@@ -86,6 +86,11 @@ fn main() {
                 .possible_value("Wasmtime")
                 .default_value("Wasmer"),
         )
+        .arg(
+            Arg::with_name("count_stack_off")
+                .short("s")
+                .help("Turn off optimization counting values on the stack"),
+        )
         .subcommand(
             SubCommand::with_name("print").about("Prints all functions in the given module."),
         )
@@ -119,11 +124,13 @@ fn main() {
         } else {
             let algorithm = matches.value_of("algorithm").unwrap();
             let interpreter_kind = matches.value_of("interpreter").unwrap();
+            let count_stack_off = matches.is_present("count_stack_off");
             // TODO(taegyunkim): Propagate the template function.
             debug::print_functions(&module);
             let optimizer = stoke::Superoptimizer::new(
                 Algorithm::from_str(algorithm).unwrap(),
                 exec::InterpreterKind::from_str(interpreter_kind).unwrap(),
+                count_stack_off,
                 module,
             );
             let mut rng = rand::thread_rng();

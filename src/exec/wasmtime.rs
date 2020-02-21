@@ -1,4 +1,5 @@
 use super::{Interpreter, InterpreterKind, EPSILON, NUM_TEST_CASES};
+use crate::stoke::CandidateFunc;
 use rand::Rng;
 use wasmtime::*;
 
@@ -68,17 +69,24 @@ impl Interpreter for Wasmtime {
 
     fn print_test_cases(&self) {}
 
-    fn eval_test_cases(&self, candidate: &[u8]) -> u32 {
+    fn eval_test_cases(&self, count_stack_off: bool, candidate: &mut CandidateFunc) -> u32 {
         let return_type_bits: u32 = self.return_type_bits.iter().sum();
+        let invalid_cost = (return_type_bits + EPSILON) * self.test_cases.len() as u32;
 
-        let module_or_err = Module::new(&self.store, &candidate);
+        if !count_stack_off && candidate.stack_cnt() as usize != self.return_type_bits.len() {
+            return invalid_cost;
+        }
+
+        let binary = candidate.get_binary();
+
+        let module_or_err = Module::new(&self.store, &binary);
         if module_or_err.is_err() {
-            return (return_type_bits + EPSILON) * self.test_cases.len() as u32;
+            return invalid_cost;
         }
         let module = module_or_err.unwrap();
         let instance_or_err = Instance::new(&self.store, &module, &[]);
         if instance_or_err.is_err() {
-            return (return_type_bits + EPSILON) * self.test_cases.len() as u32;
+            return invalid_cost;
         }
         let instance = instance_or_err.unwrap();
         let func = instance
@@ -118,6 +126,10 @@ impl Interpreter for Wasmtime {
 
     fn return_bit_width(&self) -> u32 {
         self.return_type_bits.iter().sum()
+    }
+
+    fn num_test_cases(&self) -> usize {
+        self.test_cases.len()
     }
 }
 
