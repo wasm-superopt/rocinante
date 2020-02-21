@@ -42,7 +42,7 @@ impl Distribution<Transform> for Standard {
     }
 }
 
-fn stack_cnt(instr: &Instruction) -> i32 {
+pub fn stack_cnt(instr: &Instruction) -> i32 {
     match *instr {
         Instruction::I32Add
         | Instruction::I32Sub

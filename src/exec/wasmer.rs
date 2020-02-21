@@ -1,4 +1,5 @@
 use super::{Interpreter, InterpreterKind, EPSILON, NUM_TEST_CASES};
+use crate::stoke::CandidateFunc;
 use rand::Rng;
 use wasmer_runtime::*;
 
@@ -56,29 +57,36 @@ impl Interpreter for Wasmer {
 
     fn print_test_cases(&self) {}
 
-    fn eval_test_cases(&self, candidate: &[u8]) -> u32 {
+    fn eval_test_cases(&self, candidate: &mut CandidateFunc) -> u32 {
         let return_type_bits: u32 = self.return_type_bits.iter().sum();
+        let invalid_cost = (return_type_bits + EPSILON) * self.test_cases.len() as u32;
+
+        if candidate.stack_cnt() as usize != self.return_type_bits.len() {
+            return invalid_cost;
+        }
+
+        let binary = candidate.get_binary();
 
         let module_or_err = compile_with_config(
-            candidate,
+            binary,
             CompilerConfig {
                 enforce_stack_check: true,
                 ..Default::default()
             },
         );
         if module_or_err.is_err() {
-            return (return_type_bits + EPSILON) * self.test_cases.len() as u32;
+            return invalid_cost;
         }
         let module = module_or_err.unwrap();
         let import_object = imports! {};
         let instance_or_err = module.instantiate(&import_object);
         if instance_or_err.is_err() {
-            return (return_type_bits + EPSILON) * self.test_cases.len() as u32;
+            return invalid_cost;
         }
         let instance = instance_or_err.unwrap();
         let func_or_err = instance.dyn_func("candidate");
         if func_or_err.is_err() {
-            return (return_type_bits + EPSILON) * self.test_cases.len() as u32;
+            return invalid_cost;
         }
         let func = func_or_err.unwrap();
         let mut dist = 0;
@@ -166,35 +174,4 @@ fn gen_random_input(param_types: &[types::Type]) -> Input {
     }
 
     inputs
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    #[test]
-    fn sanity_test() {
-        let binary =
-            wat::parse_file("./examples/hackers_delight/p7.wat").expect("Failed to parse .wat");
-        let mut interpreter = Wasmer::new(&binary, "p7");
-        interpreter.add_test_case(&[::wasmi::RuntimeValue::I32(2147483647)]);
-
-        let candidate = wabt::wat2wasm(
-            r#"(module
-                (func $p7 (export "p7") (param i32) (result i32)
-                  i32.const -1
-                  local.get 0
-                  i32.const -2
-                  local.get 0
-                  i32.sub
-                  i32.or
-                  i32.rem_u
-                )
-              )"#,
-        )
-        .expect("Failed to convert to binary");
-
-        let cost = interpreter.eval_test_cases(&candidate);
-        println!("{}", cost);
-        assert_ne!(cost, 0);
-    }
 }

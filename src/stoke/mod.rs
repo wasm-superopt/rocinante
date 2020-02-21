@@ -62,11 +62,8 @@ impl Superoptimizer {
                     func_body.code().elements().len(),
                     constants.clone(),
                 );
-                let mut curr_cost = if candidate_func.stack_cnt() == 1 {
-                    interpreter.eval_test_cases(&candidate_func.get_binary())
-                } else {
-                    interpreter.num_test_cases() as u32 * (32 + 1)
-                };
+
+                let mut curr_cost = interpreter.eval_test_cases(&mut candidate_func);
                 loop {
                     if curr_cost == 0 {
                         let module = candidate_func.to_module();
@@ -88,11 +85,7 @@ impl Superoptimizer {
 
                     let transform = rng.gen::<Transform>();
                     let transform_info = transform.operate(rng, &mut candidate_func);
-                    let new_cost = if candidate_func.stack_cnt() == 1 {
-                        interpreter.eval_test_cases(&candidate_func.get_binary())
-                    } else {
-                        interpreter.num_test_cases() as u32 * (32 + 1)
-                    };
+                    let new_cost = interpreter.eval_test_cases(&mut candidate_func);
 
                     #[cfg(debug_assertions)]
                     println!("curr_cost: {}, new_cost: {}", curr_cost, new_cost);
