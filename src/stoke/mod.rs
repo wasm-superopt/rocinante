@@ -15,14 +15,21 @@ pub mod whitelist;
 pub struct Superoptimizer {
     algorithm: Algorithm,
     interpreter_kind: InterpreterKind,
+    count_stack_off: bool,
     module: Module,
 }
 
 impl Superoptimizer {
-    pub fn new(algorithm: Algorithm, interpreter_kind: InterpreterKind, module: Module) -> Self {
+    pub fn new(
+        algorithm: Algorithm,
+        interpreter_kind: InterpreterKind,
+        count_stack_off: bool,
+        module: Module,
+    ) -> Self {
         Superoptimizer {
             algorithm,
             interpreter_kind,
+            count_stack_off,
             module,
         }
     }
@@ -63,7 +70,8 @@ impl Superoptimizer {
                     constants.clone(),
                 );
 
-                let mut curr_cost = interpreter.eval_test_cases(&mut candidate_func);
+                let mut curr_cost =
+                    interpreter.eval_test_cases(self.count_stack_off, &mut candidate_func);
                 loop {
                     if curr_cost == 0 {
                         let module = candidate_func.to_module();
@@ -85,7 +93,8 @@ impl Superoptimizer {
 
                     let transform = rng.gen::<Transform>();
                     let transform_info = transform.operate(rng, &mut candidate_func);
-                    let new_cost = interpreter.eval_test_cases(&mut candidate_func);
+                    let new_cost =
+                        interpreter.eval_test_cases(self.count_stack_off, &mut candidate_func);
 
                     #[cfg(debug_assertions)]
                     println!("curr_cost: {}, new_cost: {}", curr_cost, new_cost);

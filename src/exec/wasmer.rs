@@ -57,11 +57,11 @@ impl Interpreter for Wasmer {
 
     fn print_test_cases(&self) {}
 
-    fn eval_test_cases(&self, candidate: &mut CandidateFunc) -> u32 {
+    fn eval_test_cases(&self, count_stack_off: bool, candidate: &mut CandidateFunc) -> u32 {
         let return_type_bits: u32 = self.return_type_bits.iter().sum();
         let invalid_cost = (return_type_bits + EPSILON) * self.test_cases.len() as u32;
 
-        if candidate.stack_cnt() as usize != self.return_type_bits.len() {
+        if !count_stack_off && candidate.stack_cnt() as usize != self.return_type_bits.len() {
             return invalid_cost;
         }
 
