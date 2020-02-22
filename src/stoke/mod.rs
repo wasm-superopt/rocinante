@@ -1,4 +1,4 @@
-use crate::exec::InterpreterKind;
+use crate::exec::{Interpreter, InterpreterKind};
 use crate::{debug, exec, parity_wasm_utils, solver, Algorithm};
 use parity_wasm::elements::{Internal, Module};
 use rand::distributions::{Bernoulli, Distribution};
@@ -34,6 +34,14 @@ impl Superoptimizer {
 
     pub fn run(&self) {}
 
+    pub fn eval_candidate(&self, interpreter: &dyn Interpreter, candidate: &mut Candidate) -> u32 {
+        if !self.count_stack_off && candidate.stack_cnt() != interpreter.return_type_len() as i32 {
+            return interpreter.score_invalid();
+        }
+        let binary = candidate.get_binary();
+        interpreter.eval_test_cases(&binary)
+    }
+
     /// Finds a module that has functions equivalent to the functions in the given module.
     pub fn synthesize<R: Rng + ?Sized>(&self, rng: &mut R, constants: Vec<i32>) {
         let export_section = self
@@ -68,8 +76,7 @@ impl Superoptimizer {
                     constants.clone(),
                 );
 
-                let mut curr_cost =
-                    interpreter.eval_test_cases(self.count_stack_off, &mut candidate_func);
+                let mut curr_cost = self.eval_candidate(interpreter.as_ref(), &mut candidate_func);
                 loop {
                     if curr_cost == 0 {
                         let module = candidate_func.to_module();
@@ -91,8 +98,7 @@ impl Superoptimizer {
 
                     let transform = rng.gen::<Transform>();
                     let transform_info = transform.operate(rng, &mut candidate_func);
-                    let new_cost =
-                        interpreter.eval_test_cases(self.count_stack_off, &mut candidate_func);
+                    let new_cost = self.eval_candidate(interpreter.as_ref(), &mut candidate_func);
 
                     #[cfg(debug_assertions)]
                     println!("curr_cost: {}, new_cost: {}", curr_cost, new_cost);

@@ -1,5 +1,4 @@
-use super::{Interpreter, InterpreterKind, EPSILON, NUM_TEST_CASES};
-use crate::stoke::Candidate;
+use super::{Interpreter, InterpreterKind, NUM_TEST_CASES};
 use rand::Rng;
 use wasmer_runtime::*;
 
@@ -57,16 +56,7 @@ impl Interpreter for Wasmer {
 
     fn print_test_cases(&self) {}
 
-    fn eval_test_cases(&self, count_stack_off: bool, candidate: &mut Candidate) -> u32 {
-        let return_type_bits: u32 = self.return_type_bits.iter().sum();
-        let invalid_cost = (return_type_bits + EPSILON) * self.test_cases.len() as u32;
-
-        if !count_stack_off && candidate.stack_cnt() as usize != self.return_type_bits.len() {
-            return invalid_cost;
-        }
-
-        let binary = candidate.get_binary();
-
+    fn eval_test_cases(&self, binary: &[u8]) -> u32 {
         let module_or_err = compile_with_config(
             binary,
             CompilerConfig {
@@ -75,18 +65,18 @@ impl Interpreter for Wasmer {
             },
         );
         if module_or_err.is_err() {
-            return invalid_cost;
+            return self.score_invalid();
         }
         let module = module_or_err.unwrap();
         let import_object = imports! {};
         let instance_or_err = module.instantiate(&import_object);
         if instance_or_err.is_err() {
-            return invalid_cost;
+            return self.score_invalid();
         }
         let instance = instance_or_err.unwrap();
         let func_or_err = instance.dyn_func("candidate");
         if func_or_err.is_err() {
-            return invalid_cost;
+            return self.score_invalid();
         }
         let func = func_or_err.unwrap();
         let mut dist = 0;
@@ -110,6 +100,10 @@ impl Interpreter for Wasmer {
 
         let output = func.call(&input);
         self.test_cases.push((input, output));
+    }
+
+    fn return_type_len(&self) -> usize {
+        self.return_type_bits.len()
     }
 
     fn return_bit_width(&self) -> u32 {
