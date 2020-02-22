@@ -1,4 +1,4 @@
-use crate::stoke::CandidateFunc;
+use crate::stoke::Candidate;
 use parity_wasm::elements::Instruction;
 use rand::seq::SliceRandom;
 use rand::Rng;
@@ -33,7 +33,7 @@ impl WhitelistedInstruction {
     pub fn sample<R: Rng + ?Sized>(
         rng: &mut R,
         // TODO(taegyunkim): Support increasing the number of locals.
-        candidate_func: &mut CandidateFunc,
+        candidate_func: &mut Candidate,
     ) -> WhitelistedInstruction {
         match rng.gen_range(0, 20) {
             0 => WhitelistedInstruction::I32Add,
@@ -79,9 +79,9 @@ impl std::fmt::Display for WhitelistedInstruction {
             WhitelistedInstruction::I32Rotl => write!(f, "i32.rotl"),
             WhitelistedInstruction::I32Rotr => write!(f, "i32.rotr"),
             WhitelistedInstruction::I32Const(i) => write!(f, "i32.const {}", i),
-            WhitelistedInstruction::GetLocal(i) => write!(f, "get_local {}", i),
-            WhitelistedInstruction::SetLocal(i) => write!(f, "set_local {}", i),
-            WhitelistedInstruction::TeeLocal(i) => write!(f, "tee_local {}", i),
+            WhitelistedInstruction::GetLocal(i) => write!(f, "local.get {}", i),
+            WhitelistedInstruction::SetLocal(i) => write!(f, "local.set {}", i),
+            WhitelistedInstruction::TeeLocal(i) => write!(f, "local.tee {}", i),
             WhitelistedInstruction::Nop => write!(f, "nop"),
         }
     }

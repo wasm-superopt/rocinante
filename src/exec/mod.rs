@@ -1,5 +1,3 @@
-use crate::stoke::CandidateFunc;
-
 pub mod wasmer;
 pub mod wasmtime;
 
@@ -23,9 +21,16 @@ pub trait Interpreter {
     // NOTE(taegyunkim): The return type of this function is unsigned instead of
     // signed because it represents the sum of hamming distances. When it overflows,
     // rust will panic.
-    fn eval_test_cases(&self, count_stack_off: bool, candidate: &mut CandidateFunc) -> u32;
+    fn eval_test_cases(&self, binary: &[u8]) -> u32;
 
-    fn add_test_case(&mut self, input: &[::wasmi::RuntimeValue]);
+    /// Score for an invalid WASM program.
+    fn score_invalid(&self) -> u32 {
+        self.num_test_cases() as u32 * (self.return_bit_width() + EPSILON)
+    }
+
+    fn add_test_case(&mut self, input: Vec<::wasmer_runtime::Value>);
+
+    fn return_type_len(&self) -> usize;
 
     fn return_bit_width(&self) -> u32;
 

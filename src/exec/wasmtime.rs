@@ -1,5 +1,4 @@
-use super::{Interpreter, InterpreterKind, EPSILON, NUM_TEST_CASES};
-use crate::stoke::CandidateFunc;
+use super::{Interpreter, InterpreterKind, NUM_TEST_CASES};
 use rand::Rng;
 use wasmtime::*;
 
@@ -69,24 +68,15 @@ impl Interpreter for Wasmtime {
 
     fn print_test_cases(&self) {}
 
-    fn eval_test_cases(&self, count_stack_off: bool, candidate: &mut CandidateFunc) -> u32 {
-        let return_type_bits: u32 = self.return_type_bits.iter().sum();
-        let invalid_cost = (return_type_bits + EPSILON) * self.test_cases.len() as u32;
-
-        if !count_stack_off && candidate.stack_cnt() as usize != self.return_type_bits.len() {
-            return invalid_cost;
-        }
-
-        let binary = candidate.get_binary();
-
+    fn eval_test_cases(&self, binary: &[u8]) -> u32 {
         let module_or_err = Module::new(&self.store, &binary);
         if module_or_err.is_err() {
-            return invalid_cost;
+            return self.score_invalid();
         }
         let module = module_or_err.unwrap();
         let instance_or_err = Instance::new(&self.store, &module, &[]);
         if instance_or_err.is_err() {
-            return invalid_cost;
+            return self.score_invalid();
         }
         let instance = instance_or_err.unwrap();
         let func = instance
@@ -103,7 +93,7 @@ impl Interpreter for Wasmtime {
         dist
     }
 
-    fn add_test_case(&mut self, wasmi_input: &[::wasmi::RuntimeValue]) {
+    fn add_test_case(&mut self, input: Vec<::wasmer_runtime::Value>) {
         let func = self
             .instance
             .find_export_by_name(&self.func_name)
@@ -112,16 +102,20 @@ impl Interpreter for Wasmtime {
             .unwrap()
             .borrow();
 
-        let new_input: Vec<Val> = wasmi_input
-            .iter()
+        let wasmtime_input: Vec<Val> = input
+            .into_iter()
             .map(|i| match i {
-                ::wasmi::RuntimeValue::I32(x) => Val::I32(*x),
+                ::wasmer_runtime::Value::I32(x) => Val::I32(x),
                 unimplemented => panic!("type not implemented {:?}", unimplemented),
             })
             .collect();
 
-        let output = func.call(&new_input);
-        self.test_cases.push((new_input, output));
+        let output = func.call(&wasmtime_input);
+        self.test_cases.push((wasmtime_input, output));
+    }
+
+    fn return_type_len(&self) -> usize {
+        self.return_type_bits.len()
     }
 
     fn return_bit_width(&self) -> u32 {

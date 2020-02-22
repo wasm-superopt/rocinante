@@ -9,13 +9,13 @@ extern crate wabt;
 extern crate wasmer_runtime;
 extern crate wasmi;
 extern crate wasmparser;
+extern crate wasmprinter;
 extern crate wast;
 extern crate wat;
 #[macro_use]
 extern crate strum_macros;
 
 use clap::{App, Arg, SubCommand};
-use parity_wasm::elements::Module;
 use std::env;
 use std::fs::File;
 use std::io;
@@ -24,7 +24,6 @@ use std::path::Path;
 use std::str;
 use std::str::FromStr;
 
-pub mod debug;
 pub mod exec;
 mod parity_wasm_utils;
 pub mod solver;
@@ -114,24 +113,25 @@ fn main() {
         wasmparser::validate(&binary, None /* Uses default parser config */)
             .expect("Failed to validate.");
 
-        // Deserialize into an IR using parity-wasm.
-        let module = Module::from_bytes(&binary).expect("Failed to deserialize.");
-
         // TODO(taegyunkim): Get this from commandline.
         let constants = vec![-2, -1, 0, 1, 2];
+        println!(
+            "{}",
+            wasmprinter::print_bytes(&binary).expect("Failed to convert to .wat")
+        );
+
         if let Some(_matches) = matches.subcommand_matches("print") {
-            debug::print_functions(&module);
+            continue;
         } else {
             let algorithm = matches.value_of("algorithm").unwrap();
             let interpreter_kind = matches.value_of("interpreter").unwrap();
             let count_stack_off = matches.is_present("count_stack_off");
             // TODO(taegyunkim): Propagate the template function.
-            debug::print_functions(&module);
             let optimizer = stoke::Superoptimizer::new(
                 Algorithm::from_str(algorithm).unwrap(),
                 exec::InterpreterKind::from_str(interpreter_kind).unwrap(),
                 count_stack_off,
-                module,
+                binary,
             );
             let mut rng = rand::thread_rng();
             optimizer.synthesize(&mut rng, constants);
