@@ -1,5 +1,5 @@
 use crate::exec::{Interpreter, InterpreterKind};
-use crate::{exec, parity_wasm_utils, solver, Algorithm};
+use crate::{exec, parity_wasm_utils, solver};
 use parity_wasm::elements::{Internal, Module};
 use rand::distributions::{Bernoulli, Distribution};
 use rand::Rng;
@@ -11,32 +11,48 @@ pub mod whitelist;
 pub use self::candidate::*;
 mod candidate;
 
-pub struct Superoptimizer {
-    algorithm: Algorithm,
-    interpreter_kind: InterpreterKind,
-    count_stack_off: bool,
-    spec: Vec<u8>,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumString)]
+pub enum Algorithm {
+    Random,
+    Stoke,
 }
 
-impl Superoptimizer {
+pub struct SuperoptimizerOptions {
+    algorithm: Algorithm,
+    interpreter_kind: InterpreterKind,
+    enforce_stack_check: bool,
+}
+
+impl SuperoptimizerOptions {
     pub fn new(
         algorithm: Algorithm,
         interpreter_kind: InterpreterKind,
-        count_stack_off: bool,
-        spec: Vec<u8>,
+        enforce_stack_check: bool,
     ) -> Self {
-        Superoptimizer {
+        Self {
             algorithm,
             interpreter_kind,
-            count_stack_off,
-            spec,
+            enforce_stack_check,
         }
+    }
+}
+
+pub struct Superoptimizer {
+    spec: Vec<u8>,
+    options: SuperoptimizerOptions,
+}
+
+impl Superoptimizer {
+    pub fn new(spec: Vec<u8>, options: SuperoptimizerOptions) -> Self {
+        Superoptimizer { spec, options }
     }
 
     pub fn run(&self) {}
 
     pub fn eval_candidate(&self, interpreter: &dyn Interpreter, candidate: &mut Candidate) -> u32 {
-        if !self.count_stack_off && candidate.stack_cnt() != interpreter.return_type_len() as i32 {
+        if self.options.enforce_stack_check
+            && candidate.stack_cnt() != interpreter.return_type_len() as i32
+        {
             return interpreter.score_invalid();
         }
         let binary = candidate.get_binary();
@@ -56,7 +72,7 @@ impl Superoptimizer {
                 let func_name = export_entry.field();
 
                 let mut interpreter = exec::get_interpreter(
-                    self.interpreter_kind,
+                    self.options.interpreter_kind,
                     &module.clone().to_bytes().unwrap(),
                     func_name,
                 );
@@ -108,7 +124,7 @@ impl Superoptimizer {
 
                     #[cfg(debug_assertions)]
                     println!("curr_cost: {}, new_cost: {}", curr_cost, new_cost);
-                    match self.algorithm {
+                    match self.options.algorithm {
                         Algorithm::Random => {
                             // Always accept transform.
                             curr_cost = new_cost;

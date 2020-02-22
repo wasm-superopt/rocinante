@@ -29,12 +29,6 @@ mod parity_wasm_utils;
 pub mod solver;
 pub mod stoke;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumString)]
-pub enum Algorithm {
-    Random,
-    Stoke,
-}
-
 fn read_wasm(file: &str) -> io::Result<Vec<u8>> {
     let mut data = Vec::new();
     let mut f = File::open(file)?;
@@ -86,7 +80,7 @@ fn main() {
                 .default_value("Wasmer"),
         )
         .arg(
-            Arg::with_name("count_stack_off")
+            Arg::with_name("enforce_stack_check_off")
                 .short("s")
                 .help("Turn off optimization counting values on the stack"),
         )
@@ -123,16 +117,16 @@ fn main() {
         if let Some(_matches) = matches.subcommand_matches("print") {
             continue;
         } else {
-            let algorithm = matches.value_of("algorithm").unwrap();
-            let interpreter_kind = matches.value_of("interpreter").unwrap();
-            let count_stack_off = matches.is_present("count_stack_off");
+            let algorithm =
+                stoke::Algorithm::from_str(matches.value_of("algorithm").unwrap()).unwrap();
+            let interpreter_kind =
+                exec::InterpreterKind::from_str(matches.value_of("interpreter").unwrap()).unwrap();
+            let enforce_stack_check = !matches.is_present("enforce_stack_check_off");
+
+            let options =
+                stoke::SuperoptimizerOptions::new(algorithm, interpreter_kind, enforce_stack_check);
             // TODO(taegyunkim): Propagate the template function.
-            let optimizer = stoke::Superoptimizer::new(
-                Algorithm::from_str(algorithm).unwrap(),
-                exec::InterpreterKind::from_str(interpreter_kind).unwrap(),
-                count_stack_off,
-                binary,
-            );
+            let optimizer = stoke::Superoptimizer::new(binary, options);
             let mut rng = rand::thread_rng();
             optimizer.synthesize(&mut rng, constants);
         }
