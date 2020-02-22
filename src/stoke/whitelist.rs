@@ -79,9 +79,9 @@ impl std::fmt::Display for WhitelistedInstruction {
             WhitelistedInstruction::I32Rotl => write!(f, "i32.rotl"),
             WhitelistedInstruction::I32Rotr => write!(f, "i32.rotr"),
             WhitelistedInstruction::I32Const(i) => write!(f, "i32.const {}", i),
-            WhitelistedInstruction::GetLocal(i) => write!(f, "get_local {}", i),
-            WhitelistedInstruction::SetLocal(i) => write!(f, "set_local {}", i),
-            WhitelistedInstruction::TeeLocal(i) => write!(f, "tee_local {}", i),
+            WhitelistedInstruction::GetLocal(i) => write!(f, "local.get {}", i),
+            WhitelistedInstruction::SetLocal(i) => write!(f, "local.set {}", i),
+            WhitelistedInstruction::TeeLocal(i) => write!(f, "local.tee {}", i),
             WhitelistedInstruction::Nop => write!(f, "nop"),
         }
     }

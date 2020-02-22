@@ -8,8 +8,8 @@
  (func $0 (type $0) (param $var$0 i32) (param $var$1 i32) (result i32) 
   # The opcode that stands for addition of i32
   (i32.add
-   (get_local $var$0) # load first param
-   (get_local $var$1) # load second param
+   (local.get $var$0) # load first param
+   (local.get $var$1) # load second param
   )
  )
 ) 

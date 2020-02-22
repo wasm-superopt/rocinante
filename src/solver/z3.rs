@@ -316,8 +316,8 @@ mod tests {
             r#"(module
                 (type $t0 (func (param i32) (result i32)))
                 (func $add (type $t0) (param $p0 i32) (result i32)
-                  get_local $p0
-                  get_local $p0
+                  local.get $p0
+                  local.get $p0
                   i32.add)
                 (export "add" (func $add)))"#,
         );
@@ -326,7 +326,7 @@ mod tests {
             r#"(module
                 (type $t0 (func (param i32) (result i32)))
                 (func $mul (type $t0) (param $p0 i32) (result i32)
-                  get_local $p0
+                  local.get $p0
                   i32.const 2
                   i32.mul)
                 (export "mul" (func $mul)))"#,
@@ -349,8 +349,8 @@ mod tests {
             r#"(module
                 (type $t0 (func (param i32) (result i32)))
                 (func $add (type $t0) (param $p0 i32) (result i32)
-                  get_local $p0
-                  get_local $p0
+                  local.get $p0
+                  local.get $p0
                   i32.add)
                 (export "add" (func $add)))"#,
         );
@@ -359,7 +359,7 @@ mod tests {
             r#"(module
                 (type $t0 (func (param i32) (result i32)))
                 (func $shl (type $t0) (param $p0 i32) (result i32)
-                  get_local $p0
+                  local.get $p0
                   i32.const 1
                   i32.shl)
                 (export "shl" (func $shl)))"#,
@@ -384,8 +384,8 @@ mod tests {
             r#"(module
                 (type $t0 (func (param i32) (result i32)))
                 (func $add (type $t0) (param $p0 i32) (result i32)
-                  get_local $p0
-                  get_local $p0
+                  local.get $p0
+                  local.get $p0
                   i32.add)
                 (export "add" (func $add)))"#,
         );
@@ -394,7 +394,7 @@ mod tests {
             r#"(module
                 (type $t0 (func (param i32) (result i32)))
                 (func $mul (type $t0) (param $p0 i32) (result i32)
-                  get_local $p0
+                  local.get $p0
                   i32.const 3
                   i32.mul)
                 (export "mul" (func $mul)))"#,
