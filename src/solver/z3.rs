@@ -221,7 +221,7 @@ pub enum VerifyResult {
     Verified,
     // Use wasmi::RuntimeValue to make it easier to handle these instead of
     // defining a new one.
-    CounterExample(Vec<wasmi::RuntimeValue>),
+    CounterExample(Vec<wasmer_runtime::Value>),
 }
 
 pub struct Z3Solver<'ctx> {
@@ -258,7 +258,7 @@ impl<'ctx> Z3Solver<'ctx> {
 
                     match typ {
                         ValueType::I32 => {
-                            values.push(wasmi::RuntimeValue::I32(
+                            values.push(wasmer_runtime::Value::I32(
                                 model
                                     .eval(&bound.as_bv().unwrap())
                                     .unwrap()
@@ -267,7 +267,7 @@ impl<'ctx> Z3Solver<'ctx> {
                             ));
                         }
                         ValueType::I64 => {
-                            values.push(wasmi::RuntimeValue::I64(
+                            values.push(wasmer_runtime::Value::I64(
                                 model
                                     .eval(&bound.as_bv().unwrap())
                                     .unwrap()
@@ -307,6 +307,16 @@ mod tests {
         wasmi::ModuleInstance::new(&module, &wasmi::ImportsBuilder::default())
             .expect("Failed to build wasmi module instance.")
             .assert_no_start()
+    }
+
+    fn to_wasmi_values(values: Vec<wasmer_runtime::Value>) -> Vec<wasmi::RuntimeValue> {
+        values
+            .into_iter()
+            .map(|v| match v {
+                ::wasmer_runtime::Value::I32(x) => wasmi::RuntimeValue::I32(x),
+                unimplemented => panic!("type not implemented {:?}", unimplemented),
+            })
+            .collect()
     }
 
     // Verifies that x + x == 2 * x.
@@ -411,6 +421,8 @@ mod tests {
         assert_matches!(result, VerifyResult::CounterExample(_));
         if let VerifyResult::CounterExample(cex_vec) = result {
             assert_eq!(cex_vec.len(), 1);
+
+            let cex_vec = to_wasmi_values(cex_vec);
 
             let spec_instance = instantiate(spec_module);
             let spec_output = spec_instance

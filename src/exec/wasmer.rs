@@ -87,17 +87,8 @@ impl Interpreter for Wasmer {
         dist
     }
 
-    fn add_test_case(&mut self, wasmi_input: &[::wasmi::RuntimeValue]) {
+    fn add_test_case(&mut self, input: Vec<::wasmer_runtime::Value>) {
         let func = self.instance.dyn_func(&self.func_name).unwrap();
-
-        let input: Vec<Value> = wasmi_input
-            .iter()
-            .map(|i| match i {
-                ::wasmi::RuntimeValue::I32(x) => Value::I32(*x),
-                unimplemented => panic!("type not implemented {:?}", unimplemented),
-            })
-            .collect();
-
         let output = func.call(&input);
         self.test_cases.push((input, output));
     }

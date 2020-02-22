@@ -93,7 +93,7 @@ impl Interpreter for Wasmtime {
         dist
     }
 
-    fn add_test_case(&mut self, wasmi_input: &[::wasmi::RuntimeValue]) {
+    fn add_test_case(&mut self, input: Vec<::wasmer_runtime::Value>) {
         let func = self
             .instance
             .find_export_by_name(&self.func_name)
@@ -102,16 +102,16 @@ impl Interpreter for Wasmtime {
             .unwrap()
             .borrow();
 
-        let new_input: Vec<Val> = wasmi_input
-            .iter()
+        let wasmtime_input: Vec<Val> = input
+            .into_iter()
             .map(|i| match i {
-                ::wasmi::RuntimeValue::I32(x) => Val::I32(*x),
+                ::wasmer_runtime::Value::I32(x) => Val::I32(x),
                 unimplemented => panic!("type not implemented {:?}", unimplemented),
             })
             .collect();
 
-        let output = func.call(&new_input);
-        self.test_cases.push((new_input, output));
+        let output = func.call(&wasmtime_input);
+        self.test_cases.push((wasmtime_input, output));
     }
 
     fn return_type_len(&self) -> usize {

@@ -28,7 +28,7 @@ pub trait Interpreter {
         self.num_test_cases() as u32 * (self.return_bit_width() + EPSILON)
     }
 
-    fn add_test_case(&mut self, input: &[::wasmi::RuntimeValue]);
+    fn add_test_case(&mut self, input: Vec<::wasmer_runtime::Value>);
 
     fn return_type_len(&self) -> usize;
 
