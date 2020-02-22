@@ -1,8 +1,9 @@
 use crate::exec::{Interpreter, InterpreterKind};
-use crate::{debug, exec, parity_wasm_utils, solver, Algorithm};
+use crate::{exec, parity_wasm_utils, solver, Algorithm};
 use parity_wasm::elements::{Internal, Module};
 use rand::distributions::{Bernoulli, Distribution};
 use rand::Rng;
+use wasmprinter;
 
 use self::transform::*;
 pub mod transform;
@@ -14,7 +15,7 @@ pub struct Superoptimizer {
     algorithm: Algorithm,
     interpreter_kind: InterpreterKind,
     count_stack_off: bool,
-    module: Module,
+    spec: Vec<u8>,
 }
 
 impl Superoptimizer {
@@ -22,13 +23,13 @@ impl Superoptimizer {
         algorithm: Algorithm,
         interpreter_kind: InterpreterKind,
         count_stack_off: bool,
-        module: Module,
+        spec: Vec<u8>,
     ) -> Self {
         Superoptimizer {
             algorithm,
             interpreter_kind,
             count_stack_off,
-            module,
+            spec,
         }
     }
 
@@ -44,8 +45,9 @@ impl Superoptimizer {
 
     /// Finds a module that has functions equivalent to the functions in the given module.
     pub fn synthesize<R: Rng + ?Sized>(&self, rng: &mut R, constants: Vec<i32>) {
-        let export_section = self
-            .module
+        let module = Module::from_bytes(&self.spec).expect("Failed to deserialize.");
+
+        let export_section = module
             .export_section()
             .expect("Module doesn't have export section.");
 
@@ -55,12 +57,11 @@ impl Superoptimizer {
 
                 let mut interpreter = exec::get_interpreter(
                     self.interpreter_kind,
-                    &self.module.clone().to_bytes().unwrap(),
+                    &module.clone().to_bytes().unwrap(),
                     func_name,
                 );
 
-                let (func_type, func_body) =
-                    parity_wasm_utils::func_by_name(&self.module, func_name);
+                let (func_type, func_body) = parity_wasm_utils::func_by_name(&module, func_name);
 
                 // Check whether the spec contains only whitelisted instructions.
                 whitelist::validate(func_body.code().elements());
@@ -79,8 +80,13 @@ impl Superoptimizer {
                 let mut curr_cost = self.eval_candidate(interpreter.as_ref(), &mut candidate_func);
                 loop {
                     if curr_cost == 0 {
-                        let module = candidate_func.to_module();
-                        debug::print_functions(&module);
+                        println!(
+                            "{}",
+                            wasmprinter::print_bytes(
+                                candidate_func.to_module().to_bytes().unwrap()
+                            )
+                            .unwrap()
+                        );
                         match z3solver.verify(&candidate_func.to_func_body()) {
                             solver::VerifyResult::Verified => {
                                 println!("Verified.");

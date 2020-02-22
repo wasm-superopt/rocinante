@@ -90,7 +90,6 @@ pub fn build_module(func_name: &str, func_type: &FunctionType, func_body: FuncBo
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::debug;
     use parity_wasm::elements::{Instruction, Instructions, ValueType};
 
     fn instantiate(module: parity_wasm::elements::Module) -> wasmi::ModuleRef {
@@ -115,7 +114,6 @@ mod tests {
         );
 
         let add_module = build_module("add", &func_type, func_body);
-        debug::print_functions(&add_module);
         let instance = instantiate(add_module);
         assert_eq!(
             instance
