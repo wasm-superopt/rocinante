@@ -1,4 +1,4 @@
-use crate::stoke::CandidateFunc;
+use crate::stoke::Candidate;
 use parity_wasm::elements::Instruction;
 use rand::seq::SliceRandom;
 use rand::Rng;
@@ -33,7 +33,7 @@ impl WhitelistedInstruction {
     pub fn sample<R: Rng + ?Sized>(
         rng: &mut R,
         // TODO(taegyunkim): Support increasing the number of locals.
-        candidate_func: &mut CandidateFunc,
+        candidate_func: &mut Candidate,
     ) -> WhitelistedInstruction {
         match rng.gen_range(0, 20) {
             0 => WhitelistedInstruction::I32Add,

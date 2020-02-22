@@ -1,5 +1,5 @@
 use super::{Interpreter, InterpreterKind, EPSILON, NUM_TEST_CASES};
-use crate::stoke::CandidateFunc;
+use crate::stoke::Candidate;
 use rand::Rng;
 use wasmtime::*;
 
@@ -69,7 +69,7 @@ impl Interpreter for Wasmtime {
 
     fn print_test_cases(&self) {}
 
-    fn eval_test_cases(&self, count_stack_off: bool, candidate: &mut CandidateFunc) -> u32 {
+    fn eval_test_cases(&self, count_stack_off: bool, candidate: &mut Candidate) -> u32 {
         let return_type_bits: u32 = self.return_type_bits.iter().sum();
         let invalid_cost = (return_type_bits + EPSILON) * self.test_cases.len() as u32;
 
