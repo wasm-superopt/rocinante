@@ -91,12 +91,12 @@ fn main() {
             Arg::with_name("compute_budget_in_min")
                 .short("b")
                 .help("The max runtime of one synthesis or optimization step in minutes")
-                .default_value("1"),
+                .default_value("3"),
         )
         .arg(
             Arg::with_name("run_synthesis_only")
                 .short("s")
-                .help("Run only synthesis and skip optimization step."),
+                .help("Run synthesis step only and skip optimization step."),
         )
         .subcommand(
             SubCommand::with_name("print").about("Prints all functions in the given module."),

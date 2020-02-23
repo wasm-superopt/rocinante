@@ -18,16 +18,20 @@
 $> cargo run -- help
 
 USAGE:
-    rocinante [OPTIONS] <FILE> [SUBCOMMAND]
+    rocinante [FLAGS] [OPTIONS] <FILE> [SUBCOMMAND]
 
 FLAGS:
     -h, --help       Prints help information
-    -V, --version    Prints version information
+    -s               Run only synthesis and skip optimization step.
+    -h, --help       Prints help information
+    -s               Run only synthesis and skip optimization step.
 
 OPTIONS:
-    -a <algorithm>          Superoptimization algorithm to use. [default: Stoke]  [possible values: Random, Stoke]
-    -i <interpreter>        Which interpreter to use for evaluating test cases. [default: Wasmer]  [possible values:
-                            Wasmer, Wasmtime]
+    -a <algorithm>                    Superoptimization algorithm to use. [default: Stoke]  [possible values: Random,
+                                      Stoke]
+    -b <compute_budget_in_min>        The max runtime of one synthesis or optimization step in minutes [default: 3]
+    -i <interpreter>                  Which interpreter to use for evaluating test cases. [default: Wasmer]  [possible
+                                      values: Wasmer, Wasmtime]
 
 ARGS:
     <FILE>    .wasm/.wat/.wast file to optimize
