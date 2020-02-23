@@ -21,10 +21,10 @@ USAGE:
     rocinante [FLAGS] [OPTIONS] <FILE> [SUBCOMMAND]
 
 FLAGS:
+    -e               Turn off optimization counting values on the stack
     -h, --help       Prints help information
-    -s               Run only synthesis and skip optimization step.
-    -h, --help       Prints help information
-    -s               Run only synthesis and skip optimization step.
+    -s               Run synthesis step only and skip optimization step.
+    -V, --version    Prints version information
 
 OPTIONS:
     -a <algorithm>                    Superoptimization algorithm to use. [default: Stoke]  [possible values: Random,
