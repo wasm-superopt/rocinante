@@ -6,7 +6,7 @@ use parity_wasm::elements::{
 use rand::seq::SliceRandom;
 use rand::Rng;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Candidate {
     // Fields representing the spec.
     spec_func_type: FunctionType,
