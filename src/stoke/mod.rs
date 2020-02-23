@@ -131,7 +131,7 @@ impl Superoptimizer {
     pub fn perf(&self, instrs: &[Instruction]) -> u32 {
         let mut cnt = 0;
         for instr in instrs {
-            if *instr != Instruction::End && *instr != Instruction::Nop {
+            if *instr != Instruction::Nop {
                 cnt += 1;
             }
         }
@@ -146,6 +146,7 @@ impl Superoptimizer {
             .min_by(|a, b| self.perf(a.instrs()).cmp(&self.perf(b.instrs())))
             .unwrap();
 
+        // TODO(taegyunkim): Remove NOP instructions
         println!(
             "{}",
             wasmprinter::print_bytes(best.to_module().to_bytes().unwrap()).unwrap()
