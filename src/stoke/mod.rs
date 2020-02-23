@@ -95,7 +95,6 @@ impl Superoptimizer {
                         }
 
                         if self.do_run(Mode::Optimization, interpreter.as_mut(), &mut candidate) {
-                            println!("Trying to optimize.");
                             candidates.push(candidate);
                         }
                     }
