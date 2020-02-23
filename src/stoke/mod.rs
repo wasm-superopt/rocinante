@@ -27,6 +27,7 @@ pub struct SuperoptimizerOptions {
     constants: Vec<i32>,
 }
 
+// TODO(taegyunkim): Use structopt https://docs.rs/structopt/0.3.9/structopt/index.html
 impl SuperoptimizerOptions {
     pub fn new(
         algorithm: Algorithm,
@@ -66,6 +67,7 @@ impl Superoptimizer {
     pub fn run(&self) {
         let module = Module::from_bytes(&self.spec).unwrap();
 
+        // TODO(taegyunkim): Use num_cpus crate to appropriately set the number of workers.
         let num_workers = 1;
         let mut candidates: Vec<Candidate> = Vec::with_capacity(num_workers);
 
@@ -79,6 +81,7 @@ impl Superoptimizer {
 
                 let (func_type, func_body) = parity_wasm_utils::func_by_name(&module, func_name);
 
+                // TODO(taegyunkim): Parallel processing.
                 for _ in 0..num_workers {
                     // NOTE(taegyunkim): Interpreter is not thread safe.
                     let mut interpreter =
@@ -173,7 +176,6 @@ impl Superoptimizer {
 
         // It's necessary to name this variable to trigger the callback.
         let _guard = timer.schedule_with_delay(self.options.compute_budget, move || {
-            println!("Sending message to channel.");
             let _ = tx.send(());
         });
 
@@ -201,7 +203,7 @@ impl Superoptimizer {
             }
 
             if rx.try_recv().is_ok() {
-                println!("Timed out");
+                println!("{:?} timed out", mode);
                 break;
             }
 
