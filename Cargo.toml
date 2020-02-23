@@ -15,11 +15,14 @@ A superoptimizer for WebAssembly
 """
 
 [dependencies]
+chrono = "*"
 clap = "*"
+num_cpus = "*"
 parity-wasm = "*"
 rand = "*"
 strum = "*"
 strum_macros = "*"
+timer = "*"
 wabt = "*"
 wasmer-runtime = "*"
 wasmi = "*"
@@ -38,7 +41,6 @@ env_logger = "*"
 getopts = "*"
 log = "*"
 matches = "*"
-num_cpus = "*"
 
 [[bench]]
 name = "runtime"

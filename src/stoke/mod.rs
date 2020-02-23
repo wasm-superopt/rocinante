@@ -1,8 +1,9 @@
 use crate::exec::{Interpreter, InterpreterKind};
 use crate::{exec, parity_wasm_utils, solver};
-use parity_wasm::elements::{Internal, Module};
+use parity_wasm::elements::{Instruction, Internal, Module};
 use rand::distributions::{Bernoulli, Distribution};
 use rand::Rng;
+use std::sync::mpsc::channel;
 use wasmprinter;
 
 use self::transform::*;
@@ -21,6 +22,9 @@ pub struct SuperoptimizerOptions {
     algorithm: Algorithm,
     interpreter_kind: InterpreterKind,
     enforce_stack_check: bool,
+    compute_budget: chrono::Duration,
+    run_synthesis_only: bool,
+    constants: Vec<i32>,
 }
 
 impl SuperoptimizerOptions {
@@ -28,13 +32,25 @@ impl SuperoptimizerOptions {
         algorithm: Algorithm,
         interpreter_kind: InterpreterKind,
         enforce_stack_check: bool,
+        compute_budget: chrono::Duration,
+        run_synthesis_only: bool,
+        constants: Vec<i32>,
     ) -> Self {
         Self {
             algorithm,
             interpreter_kind,
             enforce_stack_check,
+            compute_budget,
+            run_synthesis_only,
+            constants,
         }
     }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+enum Mode {
+    Synthesis,
+    Optimization,
 }
 
 pub struct Superoptimizer {
@@ -47,21 +63,11 @@ impl Superoptimizer {
         Superoptimizer { spec, options }
     }
 
-    pub fn run(&self) {}
+    pub fn run(&self) {
+        let module = Module::from_bytes(&self.spec).unwrap();
 
-    pub fn eval_candidate(&self, interpreter: &dyn Interpreter, candidate: &mut Candidate) -> u32 {
-        if self.options.enforce_stack_check
-            && candidate.stack_cnt() != interpreter.return_type_len() as i32
-        {
-            return interpreter.score_invalid();
-        }
-        let binary = candidate.get_binary();
-        interpreter.eval_test_cases(&binary)
-    }
-
-    /// Finds a module that has functions equivalent to the functions in the given module.
-    pub fn synthesize<R: Rng + ?Sized>(&self, rng: &mut R, constants: Vec<i32>) {
-        let module = Module::from_bytes(&self.spec).expect("Failed to deserialize.");
+        let num_workers = 1;
+        let mut candidates: Vec<Candidate> = Vec::with_capacity(num_workers);
 
         let export_section = module
             .export_section()
@@ -71,91 +77,173 @@ impl Superoptimizer {
             if let Internal::Function(_idx) = export_entry.internal() {
                 let func_name = export_entry.field();
 
-                let mut interpreter = exec::get_interpreter(
-                    self.options.interpreter_kind,
-                    &module.clone().to_bytes().unwrap(),
-                    func_name,
-                );
-
                 let (func_type, func_body) = parity_wasm_utils::func_by_name(&module, func_name);
 
-                // Check whether the spec contains only whitelisted instructions.
-                whitelist::validate(func_body.code().elements());
+                for _ in 0..num_workers {
+                    // NOTE(taegyunkim): Interpreter is not thread safe.
+                    let mut interpreter =
+                        exec::get_interpreter(self.options.interpreter_kind, &self.spec, func_name);
 
-                let cfg = z3::Config::new();
-                let ctx = z3::Context::new(&cfg);
-                let z3solver = solver::Z3Solver::new(&ctx, func_type, func_body);
+                    let mut candidate =
+                        Candidate::new(func_type, func_body, self.options.constants.clone());
 
-                let mut candidate_func = Candidate::new(
-                    func_type,
-                    func_body.locals(),
-                    func_body.code().elements().len(),
-                    constants.clone(),
-                );
+                    if self.do_run(Mode::Synthesis, interpreter.as_mut(), &mut candidate) {
+                        candidates.push(candidate.clone());
 
-                let mut curr_cost = self.eval_candidate(interpreter.as_ref(), &mut candidate_func);
-                loop {
-                    if curr_cost == 0 {
-                        println!(
-                            "{}",
-                            wasmprinter::print_bytes(
-                                candidate_func.to_module().to_bytes().unwrap()
-                            )
-                            .unwrap()
-                        );
-                        match z3solver.verify(&candidate_func.to_func_body()) {
-                            solver::VerifyResult::Verified => {
-                                println!("Verified.");
-                                break;
-                            }
-                            solver::VerifyResult::CounterExample(values) => {
-                                println!("Adding a new test case {:?}", values);
-                                interpreter.add_test_case(values);
-                                // Verifier finds one counterexample for now, so we update the
-                                // cost to be the number of bits for return value type.
-                                curr_cost = interpreter.return_bit_width();
-                            }
+                        if self.options.run_synthesis_only {
+                            continue;
                         }
-                    }
 
-                    let transform = rng.gen::<Transform>();
-                    let transform_info = transform.operate(rng, &mut candidate_func);
-                    let new_cost = self.eval_candidate(interpreter.as_ref(), &mut candidate_func);
-
-                    #[cfg(debug_assertions)]
-                    println!("curr_cost: {}, new_cost: {}", curr_cost, new_cost);
-                    match self.options.algorithm {
-                        Algorithm::Random => {
-                            // Always accept transform.
-                            curr_cost = new_cost;
-                        }
-                        Algorithm::Stoke => {
-                            if new_cost < curr_cost {
-                                // Accept this transform.
-                                curr_cost = new_cost;
-                            } else {
-                                // Following computes min(1, exp(-0.4 * new_cost/ curr_cost))
-                                // TODO(taegyunkim): Use parameter \beta instead of -0.4
-                                let p: f64 = (1.0 as f64)
-                                    .min((-0.2 * (new_cost as f64) / (curr_cost as f64)).exp());
-                                let d = Bernoulli::new(p).unwrap();
-                                #[cfg(debug_assertions)]
-                                println!("p: {}", p);
-                                let accept = d.sample(rng);
-                                if !accept {
-                                    #[cfg(debug_assertions)]
-                                    println!("undoing...");
-                                    transform.undo(&transform_info, &mut candidate_func);
-                                } else {
-                                    #[cfg(debug_assertions)]
-                                    println!("accepted...");
-                                    curr_cost = new_cost;
-                                }
-                            }
+                        if self.do_run(Mode::Optimization, interpreter.as_mut(), &mut candidate) {
+                            println!("Trying to optimize.");
+                            candidates.push(candidate);
                         }
                     }
                 }
             }
         }
+    }
+
+    fn eval_candidate(
+        &self,
+        mode: Mode,
+        interpreter: &dyn Interpreter,
+        candidate: &mut Candidate,
+    ) -> u32 {
+        let mut cost = if self.options.enforce_stack_check
+            && candidate.stack_cnt() != interpreter.return_type_len() as i32
+        {
+            interpreter.score_invalid()
+        } else {
+            let binary = candidate.get_binary();
+            interpreter.eval_test_cases(&binary)
+        };
+
+        if mode == Mode::Optimization {
+            cost += self.perf(candidate.get_func_body().code().elements());
+        }
+
+        cost
+    }
+
+    pub fn perf(&self, instrs: &[Instruction]) -> u32 {
+        let mut cnt = 0;
+        for instr in instrs {
+            if *instr != Instruction::End && *instr != Instruction::Nop {
+                cnt += 1;
+            }
+        }
+        cnt
+    }
+
+    pub fn rank(&self, candidates: &[Candidate]) {
+        println!("Found {} programs", candidates.len());
+
+        let best = candidates
+            .iter()
+            .min_by(|a, b| self.perf(a.instrs()).cmp(&self.perf(b.instrs())))
+            .unwrap();
+
+        println!(
+            "{}",
+            wasmprinter::print_bytes(best.to_module().to_bytes().unwrap()).unwrap()
+        );
+    }
+
+    fn do_run(
+        &self,
+        mode: Mode,
+        interpreter: &mut dyn Interpreter,
+        candidate: &mut Candidate,
+    ) -> bool {
+        let func_type = candidate.spec_func_type();
+        let func_body = candidate.get_spec_func_body();
+
+        let cfg = z3::Config::new();
+        let ctx = z3::Context::new(&cfg);
+        let z3solver = solver::Z3Solver::new(&ctx, func_type, func_body);
+
+        let mut rng = rand::thread_rng();
+
+        let mut curr_cost = self.eval_candidate(mode, interpreter, candidate);
+
+        let initial_cost = curr_cost;
+
+        let timer = timer::Timer::new();
+        let (tx, rx) = channel();
+
+        // It's necessary to name this variable to trigger the callback.
+        let _guard = timer.schedule_with_delay(self.options.compute_budget, move || {
+            println!("Sending message to channel.");
+            let _ = tx.send(());
+        });
+
+        loop {
+            if (mode == Mode::Optimization && curr_cost < initial_cost)
+                || (mode == Mode::Synthesis && curr_cost == 0)
+            {
+                println!(
+                    "{}",
+                    wasmprinter::print_bytes(candidate.get_binary()).unwrap()
+                );
+                match z3solver.verify(&candidate.get_func_body()) {
+                    solver::VerifyResult::Verified => {
+                        println!("Verified.");
+                        return true;
+                    }
+                    solver::VerifyResult::CounterExample(values) => {
+                        println!("Adding a new test case {:?}", values);
+                        interpreter.add_test_case(values);
+                        // Verifier finds one counterexample for now, so we update the
+                        // cost to be the number of bits for return value type.
+                        curr_cost = interpreter.return_bit_width();
+                    }
+                }
+            }
+
+            if rx.try_recv().is_ok() {
+                println!("Timed out");
+                break;
+            }
+
+            let transform = rng.gen::<Transform>();
+            let transform_info = transform.operate(&mut rng, candidate);
+            let new_cost = self.eval_candidate(mode, interpreter, candidate);
+
+            #[cfg(debug_assertions)]
+            println!("curr_cost: {}, new_cost: {}", curr_cost, new_cost);
+            match self.options.algorithm {
+                Algorithm::Random => {
+                    // Always accept transform.
+                    curr_cost = new_cost;
+                }
+                Algorithm::Stoke => {
+                    if new_cost < curr_cost {
+                        // Accept this transform.
+                        curr_cost = new_cost;
+                    } else {
+                        // Following computes min(1, exp(-0.4 * new_cost/ curr_cost))
+                        // TODO(taegyunkim): Use parameter \beta instead of -0.4
+                        let p: f64 =
+                            (1.0 as f64).min((-0.2 * (new_cost as f64) / (curr_cost as f64)).exp());
+                        let d = Bernoulli::new(p).unwrap();
+                        #[cfg(debug_assertions)]
+                        println!("p: {}", p);
+                        let accept = d.sample(&mut rng);
+                        if !accept {
+                            #[cfg(debug_assertions)]
+                            println!("undoing...");
+                            transform.undo(&transform_info, candidate);
+                        } else {
+                            #[cfg(debug_assertions)]
+                            println!("accepted...");
+                            curr_cost = new_cost;
+                        }
+                    }
+                }
+            }
+        }
+
+        false
     }
 }
