@@ -228,7 +228,7 @@ impl Transform {
 mod test {
     use super::*;
     use crate::stoke::Candidate;
-    use parity_wasm::elements::{FunctionType, ValueType};
+    use parity_wasm::elements::{FuncBody, FunctionType, Instruction, Instructions, ValueType};
     #[test]
     fn opcode_transform_test() {
         let transform = Transform::new(TransformKind::Opcode);
@@ -236,8 +236,14 @@ mod test {
 
         let original = Candidate::new(
             &FunctionType::new(vec![ValueType::I32], Some(ValueType::I32)),
-            &[],
-            4,
+            &FuncBody::new(
+                vec![],
+                Instructions::new(vec![
+                    Instruction::Nop,
+                    Instruction::End,
+                    Instruction::I32Const(1),
+                ]),
+            ),
             vec![-2, -1, 0, 1, 2],
         );
 
@@ -263,8 +269,14 @@ mod test {
 
         let original = Candidate::new(
             &FunctionType::new(vec![ValueType::I32], Some(ValueType::I32)),
-            &[],
-            5,
+            &FuncBody::new(
+                vec![],
+                Instructions::new(vec![
+                    Instruction::Nop,
+                    Instruction::End,
+                    Instruction::I32Const(1),
+                ]),
+            ),
             vec![-2, -1, 0, 1, 2],
         );
 
@@ -290,8 +302,14 @@ mod test {
 
         let original = Candidate::new(
             &FunctionType::new(vec![ValueType::I32], Some(ValueType::I32)),
-            &[],
-            6,
+            &FuncBody::new(
+                vec![],
+                Instructions::new(vec![
+                    Instruction::Nop,
+                    Instruction::End,
+                    Instruction::I32Const(1),
+                ]),
+            ),
             vec![-2, -1, 0, 1, 2],
         );
 

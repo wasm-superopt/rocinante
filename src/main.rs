@@ -1,10 +1,13 @@
+extern crate chrono;
 extern crate clap;
 #[cfg(test)]
 #[macro_use]
 extern crate matches;
+extern crate num_cpus;
 extern crate parity_wasm;
 extern crate rand;
 extern crate strum;
+extern crate timer;
 extern crate wabt;
 extern crate wasmer_runtime;
 extern crate wasmi;
@@ -28,12 +31,6 @@ pub mod exec;
 mod parity_wasm_utils;
 pub mod solver;
 pub mod stoke;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumString)]
-pub enum Algorithm {
-    Random,
-    Stoke,
-}
 
 fn read_wasm(file: &str) -> io::Result<Vec<u8>> {
     let mut data = Vec::new();
@@ -86,9 +83,20 @@ fn main() {
                 .default_value("Wasmer"),
         )
         .arg(
-            Arg::with_name("count_stack_off")
-                .short("s")
+            Arg::with_name("enforce_stack_check_off")
+                .short("e")
                 .help("Turn off optimization counting values on the stack"),
+        )
+        .arg(
+            Arg::with_name("compute_budget_in_min")
+                .short("b")
+                .help("The max runtime of one synthesis or optimization step in minutes")
+                .default_value("3"),
+        )
+        .arg(
+            Arg::with_name("run_synthesis_only")
+                .short("s")
+                .help("Run synthesis step only and skip optimization step."),
         )
         .subcommand(
             SubCommand::with_name("print").about("Prints all functions in the given module."),
@@ -123,18 +131,31 @@ fn main() {
         if let Some(_matches) = matches.subcommand_matches("print") {
             continue;
         } else {
-            let algorithm = matches.value_of("algorithm").unwrap();
-            let interpreter_kind = matches.value_of("interpreter").unwrap();
-            let count_stack_off = matches.is_present("count_stack_off");
-            // TODO(taegyunkim): Propagate the template function.
-            let optimizer = stoke::Superoptimizer::new(
-                Algorithm::from_str(algorithm).unwrap(),
-                exec::InterpreterKind::from_str(interpreter_kind).unwrap(),
-                count_stack_off,
-                binary,
+            let algorithm =
+                stoke::Algorithm::from_str(matches.value_of("algorithm").unwrap()).unwrap();
+            let interpreter_kind =
+                exec::InterpreterKind::from_str(matches.value_of("interpreter").unwrap()).unwrap();
+            let enforce_stack_check = !matches.is_present("enforce_stack_check_off");
+            let compute_budget = chrono::Duration::minutes(
+                matches
+                    .value_of("compute_budget_in_min")
+                    .unwrap()
+                    .parse::<i64>()
+                    .unwrap(),
             );
-            let mut rng = rand::thread_rng();
-            optimizer.synthesize(&mut rng, constants);
+            let run_synthesis_only = matches.is_present("run_synthesis_only");
+
+            let options = stoke::SuperoptimizerOptions::new(
+                algorithm,
+                interpreter_kind,
+                enforce_stack_check,
+                compute_budget,
+                run_synthesis_only,
+                constants,
+            );
+            // TODO(taegyunkim): Propagate the template function.
+            let optimizer = stoke::Superoptimizer::new(binary, options);
+            optimizer.run();
         }
     }
 }
