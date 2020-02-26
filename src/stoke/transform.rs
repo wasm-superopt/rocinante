@@ -3,7 +3,6 @@ use crate::stoke::Candidate;
 use parity_wasm::elements::Instruction;
 use rand::distributions::{Distribution, Standard};
 use rand::Rng;
-use whitelist::WhitelistedInstruction;
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum TransformKind {
@@ -140,41 +139,38 @@ impl Transform {
     ) -> TransformInfo {
         let (instr_idx, undo_instr) = candidate_func.get_rand_instr(rng);
 
-        // NOTE(taegyunkim): Force conversion to WhitelistedInstruction to avoid
+        // NOTE(taegyunkim): Force conversion to Instruction to avoid
         // a situation where we get a missing case leading to a bug.
-        let new_instr: Instruction = match undo_instr.clone().into() {
-            WhitelistedInstruction::GetLocal(i) => {
-                WhitelistedInstruction::GetLocal(candidate_func.get_equiv_local_idx(rng, i))
+        let new_instr: Instruction = match undo_instr {
+            Instruction::GetLocal(i) => {
+                Instruction::GetLocal(candidate_func.get_equiv_local_idx(rng, i))
             }
-            WhitelistedInstruction::SetLocal(i) => {
-                WhitelistedInstruction::SetLocal(candidate_func.get_equiv_local_idx(rng, i))
+            Instruction::SetLocal(i) => {
+                Instruction::SetLocal(candidate_func.get_equiv_local_idx(rng, i))
             }
-            WhitelistedInstruction::TeeLocal(i) => {
-                WhitelistedInstruction::SetLocal(candidate_func.get_equiv_local_idx(rng, i))
+            Instruction::TeeLocal(i) => {
+                Instruction::SetLocal(candidate_func.get_equiv_local_idx(rng, i))
             }
-            WhitelistedInstruction::I32Add => WhitelistedInstruction::I32Add,
-            WhitelistedInstruction::I32Sub => WhitelistedInstruction::I32Sub,
-            WhitelistedInstruction::I32Mul => WhitelistedInstruction::I32Mul,
-            WhitelistedInstruction::I32DivS => WhitelistedInstruction::I32DivS,
-            WhitelistedInstruction::I32DivU => WhitelistedInstruction::I32DivU,
-            WhitelistedInstruction::I32RemS => WhitelistedInstruction::I32RemS,
-            WhitelistedInstruction::I32RemU => WhitelistedInstruction::I32RemU,
-            WhitelistedInstruction::I32And => WhitelistedInstruction::I32And,
-            WhitelistedInstruction::I32Or => WhitelistedInstruction::I32Or,
-            WhitelistedInstruction::I32Xor => WhitelistedInstruction::I32Xor,
-            WhitelistedInstruction::I32Shl => WhitelistedInstruction::I32Shl,
-            WhitelistedInstruction::I32ShrS => WhitelistedInstruction::I32ShrS,
-            WhitelistedInstruction::I32ShrU => WhitelistedInstruction::I32ShrU,
-            WhitelistedInstruction::I32Rotl => WhitelistedInstruction::I32Rotl,
-            WhitelistedInstruction::I32Rotr => WhitelistedInstruction::I32Rotr,
-            WhitelistedInstruction::I32LeU => WhitelistedInstruction::I32LeU,
-            WhitelistedInstruction::Nop => WhitelistedInstruction::Nop,
-            WhitelistedInstruction::I32Const(_) => {
-                WhitelistedInstruction::I32Const(candidate_func.sample_i32(rng))
-            }
-        }
-        .into();
-
+            Instruction::I32Add => Instruction::I32Add,
+            Instruction::I32Sub => Instruction::I32Sub,
+            Instruction::I32Mul => Instruction::I32Mul,
+            Instruction::I32DivS => Instruction::I32DivS,
+            Instruction::I32DivU => Instruction::I32DivU,
+            Instruction::I32RemS => Instruction::I32RemS,
+            Instruction::I32RemU => Instruction::I32RemU,
+            Instruction::I32And => Instruction::I32And,
+            Instruction::I32Or => Instruction::I32Or,
+            Instruction::I32Xor => Instruction::I32Xor,
+            Instruction::I32Shl => Instruction::I32Shl,
+            Instruction::I32ShrS => Instruction::I32ShrS,
+            Instruction::I32ShrU => Instruction::I32ShrU,
+            Instruction::I32Rotl => Instruction::I32Rotl,
+            Instruction::I32Rotr => Instruction::I32Rotr,
+            Instruction::I32LeU => Instruction::I32LeU,
+            Instruction::Nop => Instruction::Nop,
+            Instruction::I32Const(_) => Instruction::I32Const(candidate_func.sample_i32(rng)),
+            _ => panic!("Instruction not implemented."),
+        };
         candidate_func.dec_stack_cnt(stack_cnt(&undo_instr));
         candidate_func.inc_stack_cnt(stack_cnt(&new_instr));
 
@@ -209,7 +205,7 @@ impl Transform {
         candidate_func: &mut Candidate,
     ) -> TransformInfo {
         let (instr_idx, undo_instr) = candidate_func.get_rand_instr(rng);
-        let new_instr: Instruction = WhitelistedInstruction::sample(rng, candidate_func).into();
+        let new_instr: Instruction = whitelist::sample(rng, candidate_func);
 
         candidate_func.dec_stack_cnt(stack_cnt(&undo_instr));
         candidate_func.inc_stack_cnt(stack_cnt(&new_instr));
