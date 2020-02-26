@@ -196,6 +196,11 @@ impl<'ctx> Converter<'ctx> {
                     let val = ast::BV::from_i64(&self.ctx, *c as i64, 32);
                     stack.push(val);
                 }
+                Instruction::I32LeU => {
+                    let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
+                    let res = lhs.bvule(&rhs);
+                    stack.push(res);
+                }
                 Instruction::Nop => {
                     // Do nothing
                 }

@@ -58,7 +58,8 @@ pub fn stack_cnt(instr: &Instruction) -> i32 {
         | Instruction::I32ShrS
         | Instruction::I32ShrU
         | Instruction::I32Rotl
-        | Instruction::I32Rotr => -1,
+        | Instruction::I32Rotr
+        | Instruction::I32LeU => -1,
         Instruction::I32Const(_) | Instruction::GetLocal(_) => 1,
         Instruction::SetLocal(_) => -1,
         Instruction::TeeLocal(_) => 1,
@@ -166,6 +167,7 @@ impl Transform {
             WhitelistedInstruction::I32ShrU => WhitelistedInstruction::I32ShrU,
             WhitelistedInstruction::I32Rotl => WhitelistedInstruction::I32Rotl,
             WhitelistedInstruction::I32Rotr => WhitelistedInstruction::I32Rotr,
+            WhitelistedInstruction::I32LeU => WhitelistedInstruction::I32LeU,
             WhitelistedInstruction::Nop => WhitelistedInstruction::Nop,
             WhitelistedInstruction::I32Const(_) => {
                 WhitelistedInstruction::I32Const(candidate_func.sample_i32(rng))

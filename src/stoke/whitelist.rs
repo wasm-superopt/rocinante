@@ -22,6 +22,7 @@ pub enum WhitelistedInstruction {
     I32ShrU,
     I32Rotl,
     I32Rotr,
+    I32LeU,
     I32Const(i32),
     GetLocal(u32),
     SetLocal(u32),
@@ -35,7 +36,7 @@ impl WhitelistedInstruction {
         // TODO(taegyunkim): Support increasing the number of locals.
         candidate_func: &mut Candidate,
     ) -> WhitelistedInstruction {
-        match rng.gen_range(0, 20) {
+        match rng.gen_range(0, 21) {
             0 => WhitelistedInstruction::I32Add,
             1 => WhitelistedInstruction::I32Sub,
             2 => WhitelistedInstruction::I32Mul,
@@ -55,6 +56,7 @@ impl WhitelistedInstruction {
             16 => WhitelistedInstruction::GetLocal(candidate_func.sample_local_idx(rng)),
             17 => WhitelistedInstruction::SetLocal(candidate_func.sample_local_idx(rng)),
             18 => WhitelistedInstruction::TeeLocal(candidate_func.sample_local_idx(rng)),
+            19 => WhitelistedInstruction::I32LeU,
             _ => WhitelistedInstruction::Nop,
         }
     }
@@ -82,6 +84,7 @@ impl std::fmt::Display for WhitelistedInstruction {
             WhitelistedInstruction::GetLocal(i) => write!(f, "local.get {}", i),
             WhitelistedInstruction::SetLocal(i) => write!(f, "local.set {}", i),
             WhitelistedInstruction::TeeLocal(i) => write!(f, "local.tee {}", i),
+            WhitelistedInstruction::I32LeU => write!(f, "i32.le_u"),
             WhitelistedInstruction::Nop => write!(f, "nop"),
         }
     }
@@ -109,6 +112,7 @@ impl From<Instruction> for WhitelistedInstruction {
             Instruction::GetLocal(i) => WhitelistedInstruction::GetLocal(i),
             Instruction::SetLocal(i) => WhitelistedInstruction::SetLocal(i),
             Instruction::TeeLocal(i) => WhitelistedInstruction::TeeLocal(i),
+            Instruction::I32LeU => WhitelistedInstruction::I32LeU,
             Instruction::Nop => WhitelistedInstruction::Nop,
             _ => panic!("{} not implemented", instr),
         }
@@ -137,6 +141,7 @@ impl Into<Instruction> for WhitelistedInstruction {
             WhitelistedInstruction::GetLocal(i) => Instruction::GetLocal(i),
             WhitelistedInstruction::SetLocal(i) => Instruction::SetLocal(i),
             WhitelistedInstruction::TeeLocal(i) => Instruction::TeeLocal(i),
+            WhitelistedInstruction::I32LeU => Instruction::I32LeU,
             WhitelistedInstruction::Nop => Instruction::Nop,
         }
     }
@@ -152,7 +157,7 @@ pub fn validate(instrs: &[Instruction]) {
     }
 }
 
-const I32BINOP: [WhitelistedInstruction; 15] = [
+const I32BINOP: [WhitelistedInstruction; 16] = [
     WhitelistedInstruction::I32Add,
     WhitelistedInstruction::I32Sub,
     WhitelistedInstruction::I32Mul,
@@ -168,6 +173,7 @@ const I32BINOP: [WhitelistedInstruction; 15] = [
     WhitelistedInstruction::I32ShrU,
     WhitelistedInstruction::I32Rotl,
     WhitelistedInstruction::I32Rotr,
+    WhitelistedInstruction::I32LeU,
 ];
 
 const VAROP: [fn(n: u32) -> WhitelistedInstruction; 3] = [
@@ -196,7 +202,8 @@ pub fn get_equiv_instr<R: Rng + ?Sized>(rng: &mut R, instr: &Instruction) -> Ins
         | WhitelistedInstruction::I32ShrS
         | WhitelistedInstruction::I32ShrU
         | WhitelistedInstruction::I32Rotl
-        | WhitelistedInstruction::I32Rotr => *I32BINOP.choose(rng).unwrap(),
+        | WhitelistedInstruction::I32Rotr
+        | WhitelistedInstruction::I32LeU => *I32BINOP.choose(rng).unwrap(),
         WhitelistedInstruction::GetLocal(i)
         | WhitelistedInstruction::SetLocal(i)
         | WhitelistedInstruction::TeeLocal(i) => (*VAROP.choose(rng).unwrap())(i),
@@ -234,6 +241,7 @@ mod tests {
             Instruction::I32ShrS,
             Instruction::I32Rotl,
             Instruction::I32Rotr,
+            Instruction::I32LeU,
             Instruction::I32Const(1),
             Instruction::GetLocal(2),
             Instruction::SetLocal(3),
