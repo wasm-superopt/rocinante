@@ -8,7 +8,7 @@ pub fn sample<R: Rng + ?Sized>(
     // TODO(taegyunkim): Support increasing the number of locals.
     candidate_func: &mut Candidate,
 ) -> Instruction {
-    match rng.gen_range(0, 30) {
+    match rng.gen_range(0, 31) {
         0 => Instruction::I32Add,
         1 => Instruction::I32Sub,
         2 => Instruction::I32Mul,
@@ -38,6 +38,7 @@ pub fn sample<R: Rng + ?Sized>(
         26 => Instruction::I32LeU,
         27 => Instruction::I32GeS,
         28 => Instruction::I32GeU,
+        29 => Instruction::I32Eqz,
         _ => Instruction::Nop,
     }
 }
@@ -81,6 +82,7 @@ pub fn stack_cnt(instr: &Instruction) -> i32 {
         | Instruction::I32LeU
         | Instruction::I32GeS
         | Instruction::I32GeU => -1,
+        Instruction::I32Eqz => 0,
         Instruction::I32Const(_) | Instruction::GetLocal(_) => 1,
         Instruction::SetLocal(_) => -1,
         Instruction::TeeLocal(_) => 1,
@@ -105,6 +107,13 @@ const I32BINOP: [Instruction; 15] = [
     Instruction::I32ShrU,
     Instruction::I32Rotl,
     Instruction::I32Rotr,
+];
+
+#[allow(dead_code)]
+const I32UNOP: [Instruction; 3] = [
+    Instruction::I32Clz,
+    Instruction::I32Ctz,
+    Instruction::I32Popcnt,
 ];
 
 const I32RELOP: [Instruction; 10] = [
@@ -155,6 +164,7 @@ pub fn get_equiv_instr<R: Rng + ?Sized>(rng: &mut R, instr: &Instruction) -> Ins
         | Instruction::I32LeU
         | Instruction::I32GeS
         | Instruction::I32GeU => I32RELOP.choose(rng).unwrap().clone(),
+        Instruction::I32Eqz => Instruction::I32Eqz,
         Instruction::GetLocal(i) | Instruction::SetLocal(i) | Instruction::TeeLocal(i) => {
             (*VAROP.choose(rng).unwrap())(i)
         }
@@ -188,6 +198,7 @@ mod tests {
             Instruction::I32Rotl,
             Instruction::I32Rotr,
             Instruction::I32LeU,
+            Instruction::I32Eqz,
             Instruction::I32Const(1),
             Instruction::GetLocal(2),
             Instruction::SetLocal(3),

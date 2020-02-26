@@ -46,6 +46,68 @@ pub struct Converter<'ctx> {
     func_type: FunctionType,
 }
 
+pub fn ctz<'a>(ctx: &'a Context, input: &ast::BV<'a>) -> ast::BV<'a> {
+    let one_bit = ast::BV::from_u64(ctx, 1, 1);
+
+    fn ctz_helper<'a>(
+        ctx: &'a z3::Context,
+        input: &ast::BV<'a>,
+        one_bit: &ast::BV<'a>,
+        i: u32,
+    ) -> ast::BV<'a> {
+        let bit_width = input.get_size();
+
+        if i == bit_width {
+            ast::BV::from_u64(ctx, i as u64, bit_width)
+        } else {
+            input.extract(i, i)._eq(&one_bit).ite(
+                &ast::BV::from_u64(ctx, i as u64, bit_width),
+                &ctz_helper(ctx, input, one_bit, i + 1),
+            )
+        }
+    }
+
+    ctz_helper(ctx, input, &one_bit, 0)
+}
+
+pub fn clz<'a>(ctx: &'a Context, input: &ast::BV<'a>) -> ast::BV<'a> {
+    let one_bit = ast::BV::from_u64(ctx, 1, 1);
+
+    fn clz_helper<'a>(
+        ctx: &'a z3::Context,
+        input: &ast::BV<'a>,
+        one_bit: &ast::BV<'a>,
+        i: u32,
+    ) -> ast::BV<'a> {
+        let bit_width = input.get_size();
+        if i == bit_width {
+            ast::BV::from_u64(ctx, i as u64, bit_width)
+        } else {
+            input
+                .extract(bit_width - 1 - i, bit_width - 1 - i)
+                ._eq(&one_bit)
+                .ite(
+                    &ast::BV::from_u64(ctx, i as u64, bit_width),
+                    &clz_helper(ctx, input, one_bit, i + 1),
+                )
+        }
+    }
+
+    clz_helper(ctx, input, &one_bit, 0)
+}
+
+pub fn popcnt<'a>(ctx: &'a Context, input: &ast::BV<'a>) -> ast::BV<'a> {
+    // As in https://stackoverflow.com/questions/39299015/sum-of-all-the-bits-in-a-bit-vector-of-z3
+    let bit_width = input.get_size();
+    let bits: Vec<ast::BV<'a>> = (0..bit_width).map(|i| input.extract(i, i)).collect();
+    let bvs: Vec<ast::BV<'a>> = bits
+        .into_iter()
+        .map(|b| ast::BV::from_u64(ctx, 0, bit_width - 1).concat(&b))
+        .collect();
+    bvs.into_iter()
+        .fold(ast::BV::from_u64(ctx, 0, bit_width), |acc, x| acc.bvadd(&x))
+}
+
 impl<'ctx> Converter<'ctx> {
     pub fn new(ctx: &'ctx Context, func_type: &FunctionType) -> Self {
         let mut z3_params: Vec<ast::Dynamic<'ctx>> = Vec::with_capacity(func_type.params().len());
@@ -276,6 +338,26 @@ impl<'ctx> Converter<'ctx> {
                         &ast::BV::from_i64(&self.ctx, 0, 32),
                     ));
                 }
+                Instruction::I32Eqz => {
+                    let val = stack.pop_as::<ast::BV<'ctx>>();
+                    let res = val._eq(&ast::BV::from_i64(&self.ctx, 0, 32));
+                    stack.push(res.ite(
+                        &ast::BV::from_i64(&self.ctx, 1, 32),
+                        &ast::BV::from_i64(&self.ctx, 0, 32),
+                    ));
+                }
+                Instruction::I32Clz => {
+                    let val = stack.pop_as::<ast::BV<'ctx>>();
+                    stack.push(clz(&self.ctx, &val));
+                }
+                Instruction::I32Ctz => {
+                    let val = stack.pop_as::<ast::BV<'ctx>>();
+                    stack.push(ctz(&self.ctx, &val));
+                }
+                Instruction::I32Popcnt => {
+                    let val = stack.pop_as::<ast::BV<'ctx>>();
+                    stack.push(popcnt(&self.ctx, &val));
+                }
                 Instruction::Nop => {
                     // Do nothing
                 }
@@ -371,7 +453,7 @@ impl<'ctx> Z3Solver<'ctx> {
 
 #[cfg(test)]
 mod tests {
-    use super::{VerifyResult, Z3Solver};
+    use super::*;
     use crate::parity_wasm_utils;
 
     fn wat2module<S: AsRef<[u8]>>(source: S) -> parity_wasm::elements::Module {
@@ -520,5 +602,100 @@ mod tests {
             // [I32(-1)] Some(I32(-2)) Some(I32(-3))
             println!("{:?} {:?} {:?}", cex_vec, spec_output, candidate_output);
         }
+    }
+    #[test]
+    fn ctz_test() {
+        let _ = env_logger::try_init();
+        let cfg = z3::Config::new();
+        let ctx = z3::Context::new(&cfg);
+
+        // 0000 0000 0000 0000 0000 0000 0000 0010
+        assert!(ctz(&ctx, &ast::BV::from_i64(&ctx, 2, 32))
+            ._eq(&ast::BV::from_u64(&ctx, 1, 32))
+            .simplify()
+            .as_bool()
+            .unwrap());
+        // all zeroes
+        assert!(ctz(&ctx, &ast::BV::from_i64(&ctx, 0, 32))
+            ._eq(&ast::BV::from_i64(&ctx, 32, 32))
+            .simplify()
+            .as_bool()
+            .unwrap());
+        // all ones
+        assert!(ctz(&ctx, &ast::BV::from_i64(&ctx, -1, 32))
+            ._eq(&ast::BV::from_i64(&ctx, 0, 32))
+            .simplify()
+            .as_bool()
+            .unwrap());
+        // 00 1010
+        assert!(ctz(&ctx, &ast::BV::from_i64(&ctx, 10, 6))
+            ._eq(&ast::BV::from_i64(&ctx, 1, 6))
+            .simplify()
+            .as_bool()
+            .unwrap());
+    }
+
+    #[test]
+    fn clz_test() {
+        let _ = env_logger::try_init();
+        let cfg = z3::Config::new();
+        let ctx = z3::Context::new(&cfg);
+
+        // 0000 0000 0000 0000 0000 0000 0000 0010
+        assert!(clz(&ctx, &ast::BV::from_i64(&ctx, 2, 32))
+            ._eq(&ast::BV::from_u64(&ctx, 30, 32))
+            .simplify()
+            .as_bool()
+            .unwrap());
+        // all zeroes
+        assert!(clz(&ctx, &ast::BV::from_i64(&ctx, 0, 32))
+            ._eq(&ast::BV::from_i64(&ctx, 32, 32))
+            .simplify()
+            .as_bool()
+            .unwrap());
+        // all ones
+        assert!(clz(&ctx, &ast::BV::from_i64(&ctx, -1, 32))
+            ._eq(&ast::BV::from_i64(&ctx, 0, 32))
+            .simplify()
+            .as_bool()
+            .unwrap());
+        // 00 1010
+        assert!(clz(&ctx, &ast::BV::from_i64(&ctx, 10, 6))
+            ._eq(&ast::BV::from_i64(&ctx, 2, 6))
+            .simplify()
+            .as_bool()
+            .unwrap());
+    }
+
+    #[test]
+    fn popcnt_test() {
+        let _ = env_logger::try_init();
+        let cfg = z3::Config::new();
+        let ctx = z3::Context::new(&cfg);
+
+        // 0000 0000 0000 0000 0000 0000 0000 0010
+        assert!(popcnt(&ctx, &ast::BV::from_i64(&ctx, 2, 32))
+            ._eq(&ast::BV::from_u64(&ctx, 1, 32))
+            .simplify()
+            .as_bool()
+            .unwrap());
+        // all zerores
+        assert!(popcnt(&ctx, &ast::BV::from_i64(&ctx, 0, 32))
+            ._eq(&ast::BV::from_i64(&ctx, 0, 32))
+            .simplify()
+            .as_bool()
+            .unwrap());
+        // all ones
+        assert!(popcnt(&ctx, &ast::BV::from_i64(&ctx, -1, 32))
+            ._eq(&ast::BV::from_i64(&ctx, 32, 32))
+            .simplify()
+            .as_bool()
+            .unwrap());
+        // 00 1010
+        assert!(popcnt(&ctx, &ast::BV::from_i64(&ctx, 10, 6))
+            ._eq(&ast::BV::from_i64(&ctx, 2, 6))
+            .simplify()
+            .as_bool()
+            .unwrap());
     }
 }
