@@ -27,7 +27,8 @@ impl Wasmer {
         let outputs: Vec<Output> = inputs.iter().map(|input| func.call(input)).collect();
         let test_cases = inputs.into_iter().zip(outputs.into_iter()).collect();
 
-        let return_type = func.signature().params();
+        let return_type = func.signature().returns();
+        assert_eq!(1, return_type.len(), "Doesn't support multi-value returns.");
         let mut return_type_bits = Vec::new();
         for typ in return_type {
             match typ {
