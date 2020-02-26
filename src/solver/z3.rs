@@ -196,9 +196,81 @@ impl<'ctx> Converter<'ctx> {
                     let val = ast::BV::from_i64(&self.ctx, *c as i64, 32);
                     stack.push(val);
                 }
+                Instruction::I32Eq => {
+                    let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
+                    let res = lhs._eq(&rhs);
+                    stack.push(res.ite(
+                        &ast::BV::from_i64(&self.ctx, 1, 32),
+                        &ast::BV::from_i64(&self.ctx, 0, 32),
+                    ));
+                }
+                Instruction::I32Ne => {
+                    let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
+                    let res = lhs._eq(&rhs);
+                    stack.push(res.ite(
+                        &ast::BV::from_i64(&self.ctx, 0, 32),
+                        &ast::BV::from_i64(&self.ctx, 1, 32),
+                    ));
+                }
+                Instruction::I32LtS => {
+                    let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
+                    let res = lhs.bvslt(&rhs);
+                    stack.push(res.ite(
+                        &ast::BV::from_i64(&self.ctx, 1, 32),
+                        &ast::BV::from_i64(&self.ctx, 0, 32),
+                    ));
+                }
+                Instruction::I32LtU => {
+                    let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
+                    let res = lhs.bvult(&rhs);
+                    stack.push(res.ite(
+                        &ast::BV::from_i64(&self.ctx, 1, 32),
+                        &ast::BV::from_i64(&self.ctx, 0, 32),
+                    ));
+                }
+                Instruction::I32GtS => {
+                    let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
+                    let res = lhs.bvsgt(&rhs);
+                    stack.push(res.ite(
+                        &ast::BV::from_i64(&self.ctx, 1, 32),
+                        &ast::BV::from_i64(&self.ctx, 0, 32),
+                    ));
+                }
+                Instruction::I32GtU => {
+                    let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
+                    let res = lhs.bvugt(&rhs);
+                    stack.push(res.ite(
+                        &ast::BV::from_i64(&self.ctx, 1, 32),
+                        &ast::BV::from_i64(&self.ctx, 0, 32),
+                    ));
+                }
+                Instruction::I32LeS => {
+                    let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
+                    let res = lhs.bvsle(&rhs);
+                    stack.push(res.ite(
+                        &ast::BV::from_i64(&self.ctx, 1, 32),
+                        &ast::BV::from_i64(&self.ctx, 0, 32),
+                    ));
+                }
                 Instruction::I32LeU => {
                     let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
                     let res: ast::Bool<'ctx> = lhs.bvule(&rhs);
+                    stack.push(res.ite(
+                        &ast::BV::from_i64(&self.ctx, 1, 32),
+                        &ast::BV::from_i64(&self.ctx, 0, 32),
+                    ));
+                }
+                Instruction::I32GeS => {
+                    let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
+                    let res = lhs.bvsge(&rhs);
+                    stack.push(res.ite(
+                        &ast::BV::from_i64(&self.ctx, 1, 32),
+                        &ast::BV::from_i64(&self.ctx, 0, 32),
+                    ));
+                }
+                Instruction::I32GeU => {
+                    let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
+                    let res = lhs.bvuge(&rhs);
                     stack.push(res.ite(
                         &ast::BV::from_i64(&self.ctx, 1, 32),
                         &ast::BV::from_i64(&self.ctx, 0, 32),

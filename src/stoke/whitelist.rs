@@ -8,7 +8,7 @@ pub fn sample<R: Rng + ?Sized>(
     // TODO(taegyunkim): Support increasing the number of locals.
     candidate_func: &mut Candidate,
 ) -> Instruction {
-    match rng.gen_range(0, 21) {
+    match rng.gen_range(0, 30) {
         0 => Instruction::I32Add,
         1 => Instruction::I32Sub,
         2 => Instruction::I32Mul,
@@ -28,7 +28,16 @@ pub fn sample<R: Rng + ?Sized>(
         16 => Instruction::GetLocal(candidate_func.sample_local_idx(rng)),
         17 => Instruction::SetLocal(candidate_func.sample_local_idx(rng)),
         18 => Instruction::TeeLocal(candidate_func.sample_local_idx(rng)),
-        19 => Instruction::I32LeU,
+        19 => Instruction::I32Eq,
+        20 => Instruction::I32Ne,
+        21 => Instruction::I32LtS,
+        22 => Instruction::I32LtU,
+        23 => Instruction::I32GtS,
+        24 => Instruction::I32GtU,
+        25 => Instruction::I32LeS,
+        26 => Instruction::I32LeU,
+        27 => Instruction::I32GeS,
+        28 => Instruction::I32GeU,
         _ => Instruction::Nop,
     }
 }
@@ -41,6 +50,43 @@ pub fn validate(_instrs: &[Instruction]) {
     //     }
     //     let _: Instruction = instr.clone().into();
     // }
+}
+
+pub fn stack_cnt(instr: &Instruction) -> i32 {
+    match *instr {
+        // i32 binary operators
+        Instruction::I32Add
+        | Instruction::I32Sub
+        | Instruction::I32Mul
+        | Instruction::I32DivS
+        | Instruction::I32DivU
+        | Instruction::I32RemS
+        | Instruction::I32RemU
+        | Instruction::I32And
+        | Instruction::I32Or
+        | Instruction::I32Xor
+        | Instruction::I32Shl
+        | Instruction::I32ShrS
+        | Instruction::I32ShrU
+        | Instruction::I32Rotl
+        | Instruction::I32Rotr => -1,
+        // i32 relative operators
+        Instruction::I32Eq
+        | Instruction::I32Ne
+        | Instruction::I32LtS
+        | Instruction::I32LtU
+        | Instruction::I32GtS
+        | Instruction::I32GtU
+        | Instruction::I32LeS
+        | Instruction::I32LeU
+        | Instruction::I32GeS
+        | Instruction::I32GeU => -1,
+        Instruction::I32Const(_) | Instruction::GetLocal(_) => 1,
+        Instruction::SetLocal(_) => -1,
+        Instruction::TeeLocal(_) => 1,
+        Instruction::Nop => 0,
+        _ => panic!("instruction {}, unimplemented", instr),
+    }
 }
 
 const I32BINOP: [Instruction; 15] = [
@@ -59,6 +105,19 @@ const I32BINOP: [Instruction; 15] = [
     Instruction::I32ShrU,
     Instruction::I32Rotl,
     Instruction::I32Rotr,
+];
+
+const I32RELOP: [Instruction; 10] = [
+    Instruction::I32Eq,
+    Instruction::I32Ne,
+    Instruction::I32LtS,
+    Instruction::I32LtU,
+    Instruction::I32GtS,
+    Instruction::I32GtU,
+    Instruction::I32LeS,
+    Instruction::I32LeU,
+    Instruction::I32GeS,
+    Instruction::I32GeU,
 ];
 
 const VAROP: [fn(n: u32) -> Instruction; 3] = [
@@ -85,8 +144,17 @@ pub fn get_equiv_instr<R: Rng + ?Sized>(rng: &mut R, instr: &Instruction) -> Ins
         | Instruction::I32ShrS
         | Instruction::I32ShrU
         | Instruction::I32Rotl
-        | Instruction::I32Rotr
-        | Instruction::I32LeU => I32BINOP.choose(rng).unwrap().clone(),
+        | Instruction::I32Rotr => I32BINOP.choose(rng).unwrap().clone(),
+        Instruction::I32Eq
+        | Instruction::I32Ne
+        | Instruction::I32LtS
+        | Instruction::I32LtU
+        | Instruction::I32GtS
+        | Instruction::I32GtU
+        | Instruction::I32LeS
+        | Instruction::I32LeU
+        | Instruction::I32GeS
+        | Instruction::I32GeU => I32RELOP.choose(rng).unwrap().clone(),
         Instruction::GetLocal(i) | Instruction::SetLocal(i) | Instruction::TeeLocal(i) => {
             (*VAROP.choose(rng).unwrap())(i)
         }

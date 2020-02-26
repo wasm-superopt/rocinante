@@ -41,32 +41,6 @@ impl Distribution<Transform> for Standard {
     }
 }
 
-pub fn stack_cnt(instr: &Instruction) -> i32 {
-    match *instr {
-        Instruction::I32Add
-        | Instruction::I32Sub
-        | Instruction::I32Mul
-        | Instruction::I32DivS
-        | Instruction::I32DivU
-        | Instruction::I32RemS
-        | Instruction::I32RemU
-        | Instruction::I32And
-        | Instruction::I32Or
-        | Instruction::I32Xor
-        | Instruction::I32Shl
-        | Instruction::I32ShrS
-        | Instruction::I32ShrU
-        | Instruction::I32Rotl
-        | Instruction::I32Rotr
-        | Instruction::I32LeU => -1,
-        Instruction::I32Const(_) | Instruction::GetLocal(_) => 1,
-        Instruction::SetLocal(_) => -1,
-        Instruction::TeeLocal(_) => 1,
-        Instruction::Nop => 0,
-        _ => panic!("instruction {}, unimplemented", instr),
-    }
-}
-
 impl Transform {
     pub fn new(kind: TransformKind) -> Self {
         Self { kind }
@@ -95,8 +69,8 @@ impl Transform {
                 let current_instr =
                     candidate_func.instrs_mut()[transform_info.undo_indices[0]].clone();
 
-                candidate_func.dec_stack_cnt(stack_cnt(&current_instr));
-                candidate_func.inc_stack_cnt(stack_cnt(&transform_info.undo_instr));
+                candidate_func.dec_stack_cnt(whitelist::stack_cnt(&current_instr));
+                candidate_func.inc_stack_cnt(whitelist::stack_cnt(&transform_info.undo_instr));
 
                 candidate_func.instrs_mut()[transform_info.undo_indices[0]] =
                     transform_info.undo_instr.clone();
@@ -118,8 +92,8 @@ impl Transform {
         let (idx, undo_instr) = candidate_func.get_rand_instr(rng);
         let new_instr = whitelist::get_equiv_instr(rng, &undo_instr);
 
-        candidate_func.dec_stack_cnt(stack_cnt(&undo_instr));
-        candidate_func.inc_stack_cnt(stack_cnt(&new_instr));
+        candidate_func.dec_stack_cnt(whitelist::stack_cnt(&undo_instr));
+        candidate_func.inc_stack_cnt(whitelist::stack_cnt(&new_instr));
 
         let instrs = candidate_func.instrs_mut();
         instrs[idx] = new_instr.clone();
@@ -166,13 +140,22 @@ impl Transform {
             Instruction::I32ShrU => Instruction::I32ShrU,
             Instruction::I32Rotl => Instruction::I32Rotl,
             Instruction::I32Rotr => Instruction::I32Rotr,
+            Instruction::I32Eq => Instruction::I32Eq,
+            Instruction::I32Ne => Instruction::I32Ne,
+            Instruction::I32LtS => Instruction::I32LtS,
+            Instruction::I32LtU => Instruction::I32LtU,
+            Instruction::I32GtS => Instruction::I32GtS,
+            Instruction::I32GtU => Instruction::I32GtU,
+            Instruction::I32LeS => Instruction::I32LeS,
             Instruction::I32LeU => Instruction::I32LeU,
+            Instruction::I32GeS => Instruction::I32GeS,
+            Instruction::I32GeU => Instruction::I32GeU,
             Instruction::Nop => Instruction::Nop,
             Instruction::I32Const(_) => Instruction::I32Const(candidate_func.sample_i32(rng)),
             _ => panic!("Instruction not implemented."),
         };
-        candidate_func.dec_stack_cnt(stack_cnt(&undo_instr));
-        candidate_func.inc_stack_cnt(stack_cnt(&new_instr));
+        candidate_func.dec_stack_cnt(whitelist::stack_cnt(&undo_instr));
+        candidate_func.inc_stack_cnt(whitelist::stack_cnt(&new_instr));
 
         let instrs = candidate_func.instrs_mut();
         instrs[instr_idx] = new_instr.clone();
@@ -207,8 +190,8 @@ impl Transform {
         let (instr_idx, undo_instr) = candidate_func.get_rand_instr(rng);
         let new_instr: Instruction = whitelist::sample(rng, candidate_func);
 
-        candidate_func.dec_stack_cnt(stack_cnt(&undo_instr));
-        candidate_func.inc_stack_cnt(stack_cnt(&new_instr));
+        candidate_func.dec_stack_cnt(whitelist::stack_cnt(&undo_instr));
+        candidate_func.inc_stack_cnt(whitelist::stack_cnt(&new_instr));
 
         let instrs = candidate_func.instrs_mut();
         instrs[instr_idx] = new_instr.clone();
