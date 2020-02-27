@@ -112,9 +112,7 @@ impl Superoptimizer {
         interpreter: &dyn Interpreter,
         candidate: &mut Candidate,
     ) -> u32 {
-        let mut cost = if self.options.enforce_stack_check
-            && candidate.stack_cnt() != interpreter.return_type_len() as i32
-        {
+        let mut cost = if self.options.enforce_stack_check && !candidate.check_stack() {
             interpreter.score_invalid()
         } else {
             let binary = candidate.get_binary();

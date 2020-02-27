@@ -66,12 +66,6 @@ impl Transform {
     pub fn undo(&self, transform_info: &TransformInfo, candidate_func: &mut Candidate) {
         match transform_info.kind {
             TransformKind::Opcode | TransformKind::Operand | TransformKind::Instruction => {
-                let current_instr =
-                    candidate_func.instrs_mut()[transform_info.undo_indices[0]].clone();
-
-                candidate_func.dec_stack_cnt(whitelist::stack_cnt(&current_instr));
-                candidate_func.inc_stack_cnt(whitelist::stack_cnt(&transform_info.undo_instr));
-
                 candidate_func.instrs_mut()[transform_info.undo_indices[0]] =
                     transform_info.undo_instr.clone();
             }
@@ -91,9 +85,6 @@ impl Transform {
     ) -> TransformInfo {
         let (idx, undo_instr) = candidate_func.get_rand_instr(rng);
         let new_instr = whitelist::get_equiv_instr(rng, &undo_instr);
-
-        candidate_func.dec_stack_cnt(whitelist::stack_cnt(&undo_instr));
-        candidate_func.inc_stack_cnt(whitelist::stack_cnt(&new_instr));
 
         let instrs = candidate_func.instrs_mut();
         instrs[idx] = new_instr.clone();
@@ -132,8 +123,6 @@ impl Transform {
                 }
             }
         };
-        candidate_func.dec_stack_cnt(whitelist::stack_cnt(&undo_instr));
-        candidate_func.inc_stack_cnt(whitelist::stack_cnt(&new_instr));
 
         let instrs = candidate_func.instrs_mut();
         instrs[instr_idx] = new_instr.clone();
@@ -167,9 +156,6 @@ impl Transform {
     ) -> TransformInfo {
         let (instr_idx, undo_instr) = candidate_func.get_rand_instr(rng);
         let new_instr: Instruction = whitelist::sample(rng, candidate_func);
-
-        candidate_func.dec_stack_cnt(whitelist::stack_cnt(&undo_instr));
-        candidate_func.inc_stack_cnt(whitelist::stack_cnt(&new_instr));
 
         let instrs = candidate_func.instrs_mut();
         instrs[instr_idx] = new_instr.clone();
