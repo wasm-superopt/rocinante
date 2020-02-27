@@ -164,6 +164,7 @@ impl<'ctx> Converter<'ctx> {
         let mut stack: ValueStack<'ctx> = ValueStack::new();
         for instr in func.code().elements() {
             match instr {
+                // I32 binops
                 Instruction::I32Add => {
                     let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
                     let res = lhs.bvadd(&rhs);
@@ -241,6 +242,7 @@ impl<'ctx> Converter<'ctx> {
                     let res = lhs.bvrotr(&rhs);
                     stack.push(res);
                 }
+                // local variable ops
                 Instruction::GetLocal(idx) => {
                     let val = &locals[*idx as usize];
                     stack.push(val.clone());
@@ -258,6 +260,7 @@ impl<'ctx> Converter<'ctx> {
                     let val = ast::BV::from_i64(&self.ctx, *c as i64, 32);
                     stack.push(val);
                 }
+                // I32 relops
                 Instruction::I32Eq => {
                     let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
                     let res = lhs._eq(&rhs);
@@ -338,6 +341,7 @@ impl<'ctx> Converter<'ctx> {
                         &ast::BV::from_i64(&self.ctx, 0, 32),
                     ));
                 }
+                // i32 testop
                 Instruction::I32Eqz => {
                     let val = stack.pop_as::<ast::BV<'ctx>>();
                     let res = val._eq(&ast::BV::from_i64(&self.ctx, 0, 32));
@@ -346,6 +350,7 @@ impl<'ctx> Converter<'ctx> {
                         &ast::BV::from_i64(&self.ctx, 0, 32),
                     ));
                 }
+                // i32 unops
                 Instruction::I32Clz => {
                     let val = stack.pop_as::<ast::BV<'ctx>>();
                     stack.push(clz(&self.ctx, &val));
@@ -358,6 +363,7 @@ impl<'ctx> Converter<'ctx> {
                     let val = stack.pop_as::<ast::BV<'ctx>>();
                     stack.push(popcnt(&self.ctx, &val));
                 }
+                // control instructions
                 Instruction::Nop => {
                     // Do nothing
                 }

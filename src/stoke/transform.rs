@@ -113,46 +113,24 @@ impl Transform {
     ) -> TransformInfo {
         let (instr_idx, undo_instr) = candidate_func.get_rand_instr(rng);
 
-        // NOTE(taegyunkim): Force conversion to Instruction to avoid
-        // a situation where we get a missing case leading to a bug.
-        let new_instr: Instruction = match undo_instr {
+        let new_instr: Instruction = match &undo_instr {
             Instruction::GetLocal(i) => {
-                Instruction::GetLocal(candidate_func.get_equiv_local_idx(rng, i))
+                Instruction::GetLocal(candidate_func.get_equiv_local_idx(rng, *i))
             }
             Instruction::SetLocal(i) => {
-                Instruction::SetLocal(candidate_func.get_equiv_local_idx(rng, i))
+                Instruction::SetLocal(candidate_func.get_equiv_local_idx(rng, *i))
             }
             Instruction::TeeLocal(i) => {
-                Instruction::SetLocal(candidate_func.get_equiv_local_idx(rng, i))
+                Instruction::SetLocal(candidate_func.get_equiv_local_idx(rng, *i))
             }
-            Instruction::I32Add => Instruction::I32Add,
-            Instruction::I32Sub => Instruction::I32Sub,
-            Instruction::I32Mul => Instruction::I32Mul,
-            Instruction::I32DivS => Instruction::I32DivS,
-            Instruction::I32DivU => Instruction::I32DivU,
-            Instruction::I32RemS => Instruction::I32RemS,
-            Instruction::I32RemU => Instruction::I32RemU,
-            Instruction::I32And => Instruction::I32And,
-            Instruction::I32Or => Instruction::I32Or,
-            Instruction::I32Xor => Instruction::I32Xor,
-            Instruction::I32Shl => Instruction::I32Shl,
-            Instruction::I32ShrS => Instruction::I32ShrS,
-            Instruction::I32ShrU => Instruction::I32ShrU,
-            Instruction::I32Rotl => Instruction::I32Rotl,
-            Instruction::I32Rotr => Instruction::I32Rotr,
-            Instruction::I32Eq => Instruction::I32Eq,
-            Instruction::I32Ne => Instruction::I32Ne,
-            Instruction::I32LtS => Instruction::I32LtS,
-            Instruction::I32LtU => Instruction::I32LtU,
-            Instruction::I32GtS => Instruction::I32GtS,
-            Instruction::I32GtU => Instruction::I32GtU,
-            Instruction::I32LeS => Instruction::I32LeS,
-            Instruction::I32LeU => Instruction::I32LeU,
-            Instruction::I32GeS => Instruction::I32GeS,
-            Instruction::I32GeU => Instruction::I32GeU,
-            Instruction::Nop => Instruction::Nop,
             Instruction::I32Const(_) => Instruction::I32Const(candidate_func.sample_i32(rng)),
-            _ => panic!("Instruction not implemented."),
+            _ => {
+                if whitelist::check(&undo_instr) {
+                    undo_instr.clone()
+                } else {
+                    panic!("Instruction not implemented.")
+                }
+            }
         };
         candidate_func.dec_stack_cnt(whitelist::stack_cnt(&undo_instr));
         candidate_func.inc_stack_cnt(whitelist::stack_cnt(&new_instr));
