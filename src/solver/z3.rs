@@ -46,7 +46,7 @@ pub struct Converter<'ctx> {
     func_type: FunctionType,
 }
 
-pub fn ctz<'a>(ctx: &'a Context, input: &ast::BV<'a>) -> ast::BV<'a> {
+fn ctz<'a>(ctx: &'a Context, input: &ast::BV<'a>) -> ast::BV<'a> {
     let one_bit = ast::BV::from_u64(ctx, 1, 1);
 
     fn ctz_helper<'a>(
@@ -70,7 +70,7 @@ pub fn ctz<'a>(ctx: &'a Context, input: &ast::BV<'a>) -> ast::BV<'a> {
     ctz_helper(ctx, input, &one_bit, 0)
 }
 
-pub fn clz<'a>(ctx: &'a Context, input: &ast::BV<'a>) -> ast::BV<'a> {
+fn clz<'a>(ctx: &'a Context, input: &ast::BV<'a>) -> ast::BV<'a> {
     let one_bit = ast::BV::from_u64(ctx, 1, 1);
 
     fn clz_helper<'a>(
@@ -96,7 +96,7 @@ pub fn clz<'a>(ctx: &'a Context, input: &ast::BV<'a>) -> ast::BV<'a> {
     clz_helper(ctx, input, &one_bit, 0)
 }
 
-pub fn popcnt<'a>(ctx: &'a Context, input: &ast::BV<'a>) -> ast::BV<'a> {
+fn popcnt<'a>(ctx: &'a Context, input: &ast::BV<'a>) -> ast::BV<'a> {
     // As in https://stackoverflow.com/questions/39299015/sum-of-all-the-bits-in-a-bit-vector-of-z3
     let bit_width = input.get_size();
     let bits: Vec<ast::BV<'a>> = (0..bit_width).map(|i| input.extract(i, i)).collect();
@@ -221,14 +221,14 @@ impl<'ctx> Converter<'ctx> {
                     stack.push(res);
                 }
                 Instruction::I32ShrS => {
+                    // NOTE(taegyunkim): sign-replicating (arithmetic) shift right.
                     let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
-                    // TODO: Confirm whether this is signed.
                     let res = lhs.bvashr(&rhs);
                     stack.push(res);
                 }
                 Instruction::I32ShrU => {
+                    // NOTE(taegyunkim): zero-replicating (logical) shift right.
                     let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
-                    // TODO: Confirm whether this is unsigned.
                     let res = lhs.bvlshr(&rhs);
                     stack.push(res);
                 }
