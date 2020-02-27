@@ -1,4 +1,5 @@
 use crate::parity_wasm_utils;
+use crate::stoke::whitelist;
 use parity_wasm::elements::serialize;
 use parity_wasm::elements::{
     FuncBody, FunctionType, Instruction, Instructions, Local, Module, ValueType,
@@ -32,6 +33,8 @@ impl Candidate {
         spec_func_body: &FuncBody,
         constants: Vec<i32>,
     ) -> Self {
+        whitelist::check_instrs(spec_func_body.code().elements());
+
         let mut binary = parity_wasm_utils::build_module(
             "candidate",
             &spec_func_type,
