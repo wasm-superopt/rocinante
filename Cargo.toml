@@ -28,7 +28,6 @@ wasmer-runtime = "*"
 wasmi = "*"
 wasmparser = "*"
 wasmprinter = "*"
-wasmtime = "*"
 wast = "*"
 wat = "*"
 z3 = "*"
@@ -60,3 +59,7 @@ features = [
     "run-cargo-fmt",
     "run-cargo-clippy"
 ]
+
+[dependencies.wasmtime]
+version = "*"
+features = ["lightbeam"]

@@ -13,6 +13,7 @@ extern crate wasmer_runtime;
 extern crate wasmi;
 extern crate wasmparser;
 extern crate wasmprinter;
+extern crate wasmtime;
 extern crate wast;
 extern crate wat;
 #[macro_use]

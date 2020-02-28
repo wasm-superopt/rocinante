@@ -1,10 +1,9 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use rand::prelude::*;
 
-fn wasmtime_invoke(binary: &[u8], func_name: &str, inputs: &[i32]) {
+fn wasmtime_invoke(store: &wasmtime::Store, binary: &[u8], func_name: &str, inputs: &[i32]) {
     use wasmtime::*;
 
-    let store = wasmtime::Store::default();
     let module = Module::new(&store, &binary).unwrap();
     let instance = Instance::new(&store, &module, &[]).unwrap();
 
@@ -16,20 +15,6 @@ fn wasmtime_invoke(binary: &[u8], func_name: &str, inputs: &[i32]) {
 
     for input in inputs {
         let _result = func.borrow().call(&[wasmtime::Val::I32(*input)]).unwrap();
-    }
-}
-
-fn wasmi_invoke(binary: &[u8], func_name: &str, inputs: &[i32]) {
-    use wasmi::*;
-
-    let module = wasmi::Module::from_buffer(&binary).expect("failed to load wasm.");
-    let instance = ModuleInstance::new(&module, &ImportsBuilder::default())
-        .unwrap()
-        .assert_no_start();
-    for input in inputs {
-        let _result = instance
-            .invoke_export(func_name, &[RuntimeValue::I32(*input)], &mut NopExternals)
-            .unwrap();
     }
 }
 
@@ -53,6 +38,13 @@ fn bench_invoke(c: &mut Criterion) {
 
     let files = ["p1", "p2", "p3", "p4", "p5", "p6"];
 
+    let engine = wasmtime::Engine::new(
+        wasmtime::Config::new()
+            .strategy(wasmtime::Strategy::Lightbeam)
+            .unwrap(),
+    );
+    let store = wasmtime::Store::new(&engine);
+
     for file in files.iter() {
         let binary: Vec<u8> =
             wat::parse_file(["./examples/hackers_delight/", file, ".wat"].concat()).unwrap();
@@ -69,11 +61,8 @@ fn bench_invoke(c: &mut Criterion) {
             group.bench_with_input(
                 BenchmarkId::new("wasmtime", &bench_name),
                 &inputs,
-                |b, i| b.iter(|| wasmtime_invoke(&binary, file, i)),
+                |b, i| b.iter(|| wasmtime_invoke(&store, &binary, file, i)),
             );
-            group.bench_with_input(BenchmarkId::new("wasmi", &bench_name), &inputs, |b, i| {
-                b.iter(|| wasmi_invoke(&binary, file, i))
-            });
             group.bench_with_input(BenchmarkId::new("wasmer", &bench_name), &inputs, |b, i| {
                 b.iter(|| wasmer_invoke(&binary, file, i))
             });
