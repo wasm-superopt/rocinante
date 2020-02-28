@@ -251,4 +251,12 @@ mod tests {
             assert!(&WHITELIST.contains(instr));
         }
     }
+
+    #[test]
+    fn stack_cnt_whitelist_test() {
+        // This should never panic
+        for instr in WHITELIST.iter() {
+            let _cnt = stack_cnt(instr);
+        }
+    }
 }
