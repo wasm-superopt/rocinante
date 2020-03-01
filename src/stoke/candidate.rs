@@ -22,7 +22,6 @@ pub struct Candidate {
 
     // Below are fields representing current candidate.
     instrs: Vec<Instruction>,
-    stack_cnt: i32,
     /// The list of constants to use for synthesis.
     constants: Vec<i32>,
 }
@@ -73,21 +72,8 @@ impl Candidate {
             // end, so subtract one for that. We assume that we want to synthesize a function that
             // simply returns a value without any control flow.
             instrs: vec![Instruction::Nop; len - 1],
-            stack_cnt: 0,
             constants,
         }
-    }
-
-    pub fn inc_stack_cnt(&mut self, n: i32) {
-        self.stack_cnt += n;
-    }
-
-    pub fn dec_stack_cnt(&mut self, n: i32) {
-        self.stack_cnt -= n;
-    }
-
-    pub fn stack_cnt(&self) -> i32 {
-        self.stack_cnt
     }
 
     pub fn get_rand_instr<R: Rng + ?Sized>(&self, rng: &mut R) -> (usize, Instruction) {
@@ -181,5 +167,16 @@ impl Candidate {
         // TODO(taegyunkim): Add a test.
         //assert_eq!(self.binary, self.to_module().to_bytes().unwrap());
         &self.binary
+    }
+
+    pub fn check_stack(&self) -> bool {
+        let mut cnt = 0;
+        for instr in self.instrs() {
+            cnt += whitelist::stack_cnt(instr);
+            if cnt < 0 {
+                return false;
+            }
+        }
+        cnt == 1
     }
 }
