@@ -58,19 +58,8 @@ impl Interpreter for Wasmer {
     fn print_test_cases(&self) {}
 
     fn eval_test_cases(&self, binary: &[u8]) -> u32 {
-        let module_or_err = compile_with_config(
-            binary,
-            CompilerConfig {
-                enforce_stack_check: true,
-                ..Default::default()
-            },
-        );
-        if module_or_err.is_err() {
-            return self.score_invalid();
-        }
-        let module = module_or_err.unwrap();
         let import_object = imports! {};
-        let instance_or_err = module.instantiate(&import_object);
+        let instance_or_err = instantiate(binary, &import_object);
         if instance_or_err.is_err() {
             return self.score_invalid();
         }
