@@ -11,18 +11,12 @@
 
 (module
   (func $p7 (export "p7") (param i32) (result i32)
-    (i32.and
-        (i32.xor (local.get 0) (i32.const -1))
-        (i32.add (local.get 0) (i32.const 1))
-    )
+    i32.const 1
+    i32.const -1
+    local.get 0
+    nop
+    i32.sub
+    i32.ctz
+    i32.shl
   )
 )
-
-;; Above can be rewritten as
-;; local.get 0
-;; i32.const -1
-;; i32.xor
-;; local.get 0
-;; i32.const 1
-;; i32.add
-;; i32.and
