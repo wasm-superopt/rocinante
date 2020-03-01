@@ -6,17 +6,12 @@
 
 (module
   (func $p10 (export "p10") (param i32 i32) (result i32)
-    (i32.le_u 
-        (i32.xor (local.get 0) (local.get 1))
-        (i32.and (local.get 0) (local.get 1))
-    )
+    local.get 1
+    i32.clz
+    local.get 0
+    i32.clz
+    i32.const 1
+    i32.div_u
+    i32.eq
   )
 )
-
-;; local.get 0
-;; local.get 1
-;; i32.xor
-;; local.get 0
-;; local.get 1
-;; i32.and
-;; i32.le_u

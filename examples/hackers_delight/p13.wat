@@ -15,3 +15,13 @@
     )
   )
 )
+
+;; local.get 0
+;; i32.const 31
+;; i32.shr_s
+;; i32.const 0
+;; local.get 0
+;; i32.sub
+;; i32.const 31
+;; i32.shr_u
+;; i32.or

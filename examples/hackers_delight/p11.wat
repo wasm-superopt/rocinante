@@ -15,3 +15,11 @@
     )
   )
 )
+
+;; local.get 0
+;; local.get 1
+;; i32.const -1
+;; i32.xor
+;; i32.and
+;; local.get 1
+;; i32.gt_u
