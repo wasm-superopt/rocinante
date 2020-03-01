@@ -50,6 +50,11 @@ harness = false
 name = "thread_rng"
 harness = false
 
+[[bench]]
+name = "eval"
+harness = false
+
+
 [dev-dependencies.cargo-husky]
 version = "1"
 default-features = false # Disable features which are enabled by default
