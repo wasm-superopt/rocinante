@@ -4,7 +4,6 @@ use parity_wasm::elements::{Instruction, Internal, Module};
 use rand::distributions::{Bernoulli, Distribution};
 use rand::Rng;
 use std::sync::mpsc::channel;
-use wasmprinter;
 
 use self::transform::*;
 pub mod transform;
