@@ -70,14 +70,8 @@ impl Interpreter for Wasmtime {
 
     fn eval_test_cases(&self, binary: &[u8]) -> u32 {
         let module_or_err = Module::new(&self.store, &binary);
-        if module_or_err.is_err() {
-            return self.score_invalid();
-        }
         let module = module_or_err.unwrap();
         let instance_or_err = Instance::new(&self.store, &module, &[]);
-        if instance_or_err.is_err() {
-            return self.score_invalid();
-        }
         let instance = instance_or_err.unwrap();
         let func = instance
             .find_export_by_name("candidate")

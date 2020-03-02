@@ -254,6 +254,8 @@ impl<'ctx> Converter<'ctx> {
                 Instruction::TeeLocal(idx) => {
                     let val = stack.pop();
                     stack.push(val.clone());
+                    // stack.push(val.clone());
+                    // val = stack.pop();
                     locals[*idx as usize] = val;
                 }
                 Instruction::I32Const(c) => {

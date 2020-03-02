@@ -60,14 +60,8 @@ impl Interpreter for Wasmer {
     fn eval_test_cases(&self, binary: &[u8]) -> u32 {
         let import_object = imports! {};
         let instance_or_err = instantiate(binary, &import_object);
-        if instance_or_err.is_err() {
-            return self.score_invalid();
-        }
         let instance = instance_or_err.unwrap();
         let func_or_err = instance.dyn_func("candidate");
-        if func_or_err.is_err() {
-            return self.score_invalid();
-        }
         let func = func_or_err.unwrap();
         let mut dist = 0;
         for (input, expected_output) in &self.test_cases {

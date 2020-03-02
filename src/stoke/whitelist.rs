@@ -123,7 +123,7 @@ pub fn check_instrs(instrs: &[Instruction]) {
     }
 }
 
-pub fn stack_cnt(instr: &Instruction) -> i32 {
+pub fn stack_cnt(instr: &Instruction) -> (i32, i32) {
     match *instr {
         // i32 binary operators
         Instruction::I32Add
@@ -140,7 +140,7 @@ pub fn stack_cnt(instr: &Instruction) -> i32 {
         | Instruction::I32ShrS
         | Instruction::I32ShrU
         | Instruction::I32Rotl
-        | Instruction::I32Rotr => -1,
+        | Instruction::I32Rotr => (2, 1),
         // i32 relative operators
         Instruction::I32Eq
         | Instruction::I32Ne
@@ -151,16 +151,16 @@ pub fn stack_cnt(instr: &Instruction) -> i32 {
         | Instruction::I32LeS
         | Instruction::I32LeU
         | Instruction::I32GeS
-        | Instruction::I32GeU => -1,
+        | Instruction::I32GeU => (2, 1),
         // i32 testop
-        Instruction::I32Eqz => 0,
+        Instruction::I32Eqz => (1, 1),
         // i32 unop
-        Instruction::I32Clz | Instruction::I32Ctz | Instruction::I32Popcnt => 0,
-        Instruction::I32Const(_) => 1,
-        Instruction::GetLocal(_) => 1,
-        Instruction::SetLocal(_) => -1,
-        Instruction::TeeLocal(_) => 1,
-        Instruction::Nop => 0,
+        Instruction::I32Clz | Instruction::I32Ctz | Instruction::I32Popcnt => (1, 1),
+        Instruction::I32Const(_) => (0, 1),
+        Instruction::GetLocal(_) => (0, 1),
+        Instruction::SetLocal(_) => (1, 0),
+        Instruction::TeeLocal(_) => (1, 1),
+        Instruction::Nop => (0, 0),
         _ => {
             if WHITELIST.contains(instr) {
                 panic!("Forgot to implement instruction {}", instr);
@@ -256,7 +256,7 @@ mod tests {
     fn stack_cnt_whitelist_test() {
         // This should never panic
         for instr in WHITELIST.iter() {
-            let _cnt = stack_cnt(instr);
+            let _cnts = stack_cnt(instr);
         }
     }
 }
