@@ -26,6 +26,12 @@ pub struct Candidate {
     constants: Vec<i32>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum StackState {
+    Valid,
+    Invalid(i32),
+}
+
 impl Candidate {
     pub fn new(
         spec_func_type: &FunctionType,
@@ -165,18 +171,69 @@ impl Candidate {
         self.binary.extend(func_binary);
 
         // TODO(taegyunkim): Add a test.
-        //assert_eq!(self.binary, self.to_module().to_bytes().unwrap());
+        assert_eq!(self.binary, self.to_module().to_bytes().unwrap());
         &self.binary
     }
 
-    pub fn check_stack(&self) -> bool {
-        let mut cnt = 0;
-        for instr in self.instrs() {
-            cnt += whitelist::stack_cnt(instr);
+    pub fn check_stack(&self) -> StackState {
+        check_instrs(self.instrs())
+    }
+}
+
+pub fn check_instrs(instrs: &[Instruction]) -> StackState {
+    let mut cnt: i32 = 0;
+    let mut valid = true;
+    for instr in instrs {
+        for c in whitelist::stack_cnt(instr) {
+            cnt += c;
             if cnt < 0 {
-                return false;
+                valid = false;
             }
         }
-        cnt == 1
+    }
+    if cnt == 1 && valid {
+        StackState::Valid
+    } else {
+        StackState::Invalid(cnt)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn check_instrs_test() {
+        assert_eq!(
+            StackState::Invalid(-2),
+            check_instrs(&vec![
+                Instruction::I32Const(-1),
+                Instruction::TeeLocal(0),
+                Instruction::I32GeS,
+                Instruction::I32ShrU,
+                Instruction::I32And,
+            ])
+        );
+
+        assert_eq!(
+            StackState::Invalid(-1),
+            check_instrs(&vec![
+                Instruction::GetLocal(0),
+                Instruction::I32Ctz,
+                Instruction::TeeLocal(0),
+                Instruction::I32LtS,
+                Instruction::I32LeS,
+            ])
+        );
+
+        assert_eq!(
+            StackState::Invalid(0),
+            check_instrs(&vec![
+                Instruction::GetLocal(0),  // 1
+                Instruction::I32Const(-2), // 2
+                Instruction::I32GtS,       // 1
+                Instruction::TeeLocal(0),  // 1
+                Instruction::SetLocal(0),  // 0
+            ])
+        );
     }
 }
