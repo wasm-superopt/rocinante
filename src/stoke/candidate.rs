@@ -184,12 +184,12 @@ pub fn check_instrs(instrs: &[Instruction]) -> StackState {
     let mut cnt: i32 = 0;
     let mut valid = true;
     for instr in instrs {
-        for c in whitelist::stack_cnt(instr) {
-            cnt += c;
-            if cnt < 0 {
-                valid = false;
-            }
+        let (pop, push) = whitelist::stack_cnt(instr);
+        cnt -= pop;
+        if cnt < 0 {
+            valid = false;
         }
+        cnt += push;
     }
     if cnt == 1 && valid {
         StackState::Valid
