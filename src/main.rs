@@ -1,24 +1,7 @@
-extern crate chrono;
-extern crate clap;
-#[cfg(test)]
-#[macro_use]
-extern crate matches;
-extern crate num_cpus;
-extern crate parity_wasm;
-extern crate rand;
-extern crate strum;
-extern crate timer;
-extern crate wabt;
-extern crate wasmer_runtime;
-extern crate wasmi;
-extern crate wasmparser;
-extern crate wasmprinter;
-extern crate wast;
-extern crate wat;
-#[macro_use]
-extern crate strum_macros;
+extern crate rocinante;
 
 use clap::{App, Arg, SubCommand};
+use rocinante::{exec, stoke};
 use std::env;
 use std::fs::File;
 use std::io;
@@ -26,11 +9,6 @@ use std::io::prelude::*;
 use std::path::Path;
 use std::str;
 use std::str::FromStr;
-
-pub mod exec;
-mod parity_wasm_utils;
-pub mod solver;
-pub mod stoke;
 
 fn read_wasm(file: &str) -> io::Result<Vec<u8>> {
     let mut data = Vec::new();

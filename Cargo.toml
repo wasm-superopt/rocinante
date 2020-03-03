@@ -42,6 +42,17 @@ getopts = "*"
 log = "*"
 matches = "*"
 
+[dev-dependencies.cargo-husky]
+version = "1"
+default-features = false # Disable features which are enabled by default
+features = [
+    "run-for-all",
+    "precommit-hook",
+    "run-cargo-test",
+    "run-cargo-fmt",
+    "run-cargo-clippy"
+]
+
 [[bench]]
 name = "runtime"
 harness = false
@@ -54,14 +65,14 @@ harness = false
 name = "eval"
 harness = false
 
+[[bench]]
+name = "verify"
+harness = false
 
-[dev-dependencies.cargo-husky]
-version = "1"
-default-features = false # Disable features which are enabled by default
-features = [
-    "run-for-all",
-    "precommit-hook",
-    "run-cargo-test",
-    "run-cargo-fmt",
-    "run-cargo-clippy"
-]
+[lib]
+name = "rocinante"
+path = "src/lib.rs"
+
+[[bin]]
+name = "rocinante"
+path = "src/main.rs"
