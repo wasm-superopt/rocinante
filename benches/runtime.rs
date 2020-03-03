@@ -51,13 +51,13 @@ fn wasmer_invoke(binary: &[u8], func_name: &str, inputs: &[i32]) {
 fn bench_invoke(c: &mut Criterion) {
     let mut group = c.benchmark_group("Invoke");
 
-    let files = ["p1", "p2", "p3", "p4", "p5", "p6"];
+    let files = ["p1", "p2", "p3", "p4", "p5", "p6", "p7", "p17"];
 
     for file in files.iter() {
         let binary: Vec<u8> =
             wat::parse_file(["./examples/hackers_delight/", file, ".wat"].concat()).unwrap();
         let mut rng = thread_rng();
-        for size in [4, 8, 16, 32, 64].iter() {
+        for size in [16].iter() {
             let size = *size as usize;
             let mut inputs = Vec::with_capacity(size);
             for _ in 0..size {
@@ -71,9 +71,6 @@ fn bench_invoke(c: &mut Criterion) {
                 &inputs,
                 |b, i| b.iter(|| wasmtime_invoke(&binary, file, i)),
             );
-            group.bench_with_input(BenchmarkId::new("wasmi", &bench_name), &inputs, |b, i| {
-                b.iter(|| wasmi_invoke(&binary, file, i))
-            });
             group.bench_with_input(BenchmarkId::new("wasmer", &bench_name), &inputs, |b, i| {
                 b.iter(|| wasmer_invoke(&binary, file, i))
             });

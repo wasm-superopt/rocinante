@@ -24,7 +24,10 @@ strum = "*"
 strum_macros = "*"
 timer = "*"
 wabt = "*"
-wasmer-runtime = "*"
+wasmer-runtime = { version = "*", default-features = false, features = [
+    "singlepass",
+    "default-backend-singlepass"
+] }
 wasmi = "*"
 wasmparser = "*"
 wasmprinter = "*"
@@ -62,7 +65,7 @@ name = "thread_rng"
 harness = false
 
 [[bench]]
-name = "eval"
+name = "call"
 harness = false
 
 [[bench]]
