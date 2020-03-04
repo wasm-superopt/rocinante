@@ -24,6 +24,7 @@ strum = "*"
 strum_macros = "*"
 timer = "*"
 wabt = "*"
+# To use cranelift, add --features=wasmer-runtime/cranelift
 wasmer-runtime = { version = "*", default-features = false, features = [
     "singlepass",
     "cranelift",
