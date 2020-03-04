@@ -24,7 +24,12 @@ strum = "*"
 strum_macros = "*"
 timer = "*"
 wabt = "*"
-wasmer-runtime = "*"
+# To use cranelift, add --features=wasmer-runtime/cranelift
+wasmer-runtime = { version = "*", default-features = false, features = [
+    "singlepass",
+    "cranelift",
+    "default-backend-singlepass"
+] }
 wasmi = "*"
 wasmparser = "*"
 wasmprinter = "*"
@@ -62,7 +67,7 @@ name = "thread_rng"
 harness = false
 
 [[bench]]
-name = "eval"
+name = "call"
 harness = false
 
 [[bench]]
