@@ -26,6 +26,7 @@ timer = "*"
 wabt = "*"
 wasmer-runtime = { version = "*", default-features = false, features = [
     "singlepass",
+    "cranelift",
     "default-backend-singlepass"
 ] }
 wasmi = "*"
