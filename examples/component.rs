@@ -12,12 +12,18 @@ fn main() {
     let cfg = Config::new();
     let ctx = Context::new(&cfg);
 
+    // Define a new datatype named Instruction which has 3 variants.
+    // 1. LocalGet 0
+    // 2. I32Add
+    // 3. Nop
     let components = DatatypeBuilder::new(&ctx)
         .variant("LocalGet0", &[])
         .variant("I32Add", &[])
         .variant("Nop", &[])
         .finish("Instruction");
 
+    // Function that converts an Instruction datatype into z3::ast::Int which represents the number
+    // of values the instruction pops off from the stack.
     fn pop_cnts<'a>(
         ctx: &'a Context,
         components: &DatatypeSort<'a>,
@@ -39,6 +45,8 @@ fn main() {
             )
     }
 
+    // Function that converts an Instruction datatype into z3::ast::Int which represents the number
+    // of values the instruction pushes to the stack.
     fn push_cnts<'a>(
         ctx: &'a Context,
         components: &DatatypeSort<'a>,
@@ -60,6 +68,7 @@ fn main() {
             )
     }
 
+    // Well formed program constraint, given a slice of instructions.
     fn is_valid<'a>(
         ctx: &'a Context,
         components: &DatatypeSort<'a>,
@@ -77,6 +86,7 @@ fn main() {
             i: usize,
         ) -> Bool<'a> {
             if i == instrs.len() {
+                // Check the number of values left on the stack at the end.
                 acc._eq(&Int::from_u64(&ctx, 1))
             } else {
                 let pop = pop_cnts(&ctx, &components, &instrs[i]);
@@ -95,6 +105,7 @@ fn main() {
     let bit_width = (components.variants.len() as f64).log(2.0).ceil() as u32;
     assert_eq!(bit_width, 2);
 
+    // A function to convert a location variable to an instruction.
     fn instr<'a>(ctx: &'a Context, components: &DatatypeSort<'a>, lvar: &BV<'a>) -> Datatype<'a> {
         lvar._eq(&BV::from_u64(&ctx, 0, lvar.get_size())).ite(
             &components.variants[0]
@@ -128,6 +139,8 @@ fn main() {
     ];
 
     let formula = is_valid(&ctx, &components, &instrs);
+    // Also needs to check the evaluation of this instruction sequence for inputs are the same with
+    // respect to the spec.
     println!("{:?}", formula);
 
     let solver = Solver::new(&ctx);
@@ -137,6 +150,16 @@ fn main() {
 
     let model = solver.get_model();
 
+    // An example output of this could be
+    // 2
+    // 2
+    // 0
+    // Which corresponds to
+    // Nop
+    // Nop
+    // local.get 0
+    // Which is a valid sequence of WASM instructions of length 3 given a function signature with
+    // a parameter, for example f(x).
     println!("{}", model.eval(&l0).unwrap().as_u64().unwrap());
     println!("{}", model.eval(&l1).unwrap().as_u64().unwrap());
     println!("{}", model.eval(&l2).unwrap().as_u64().unwrap());
