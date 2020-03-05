@@ -112,7 +112,7 @@ fn is_valid_helper<'a>(
         // if acc - pop < 0 {
         //   return false;
         // } else {
-        //   is_valid_helper(acc - pop + push, i + 1);
+        //   return is_valid_helper(acc - pop + push, i + 1);
         // }
         let pop = pop_cnts(&ctx, &instr_type, &instrs[i]);
         let res = acc.sub(&[&pop]);
