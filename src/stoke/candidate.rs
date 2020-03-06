@@ -115,6 +115,15 @@ impl Candidate {
         *equiv_indices.choose(rng).unwrap() as u32
     }
 
+    pub fn strip_nops(&mut self) {
+        self.instrs = self
+            .instrs
+            .iter()
+            .cloned()
+            .filter(|instr| *instr != Instruction::Nop)
+            .collect::<Vec<Instruction>>();
+    }
+
     pub fn sample_local_idx<R: Rng + ?Sized>(&self, rng: &mut R) -> u32 {
         rng.gen_range(
             0,
