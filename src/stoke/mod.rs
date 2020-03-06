@@ -90,6 +90,7 @@ impl Superoptimizer {
                         Candidate::new(func_type, func_body, self.options.constants.clone());
 
                     if self.do_run(Mode::Synthesis, interpreter.as_mut(), &mut candidate) {
+                        candidate.strip_nops();
                         candidates.push(candidate.clone());
 
                         if self.options.run_synthesis_only {
@@ -97,12 +98,15 @@ impl Superoptimizer {
                         }
 
                         if self.do_run(Mode::Optimization, interpreter.as_mut(), &mut candidate) {
+                            candidate.strip_nops();
                             candidates.push(candidate);
                         }
                     }
                 }
             }
         }
+
+        self.rank(&candidates);
     }
 
     fn eval_candidate(
@@ -156,7 +160,6 @@ impl Superoptimizer {
             .min_by(|a, b| self.perf(a.instrs()).cmp(&self.perf(b.instrs())))
             .unwrap();
 
-        // TODO(taegyunkim): Remove NOP instructions
         println!(
             "{}",
             wasmprinter::print_bytes(best.to_module().to_bytes().unwrap()).unwrap()
@@ -194,12 +197,12 @@ impl Superoptimizer {
             if (mode == Mode::Optimization && curr_cost < initial_cost)
                 || (mode == Mode::Synthesis && curr_cost == 0)
             {
-                println!(
-                    "{}",
-                    wasmprinter::print_bytes(candidate.get_binary()).unwrap()
-                );
                 match z3solver.verify(&candidate.get_func_body()) {
                     solver::VerifyResult::Verified => {
+                        println!(
+                            "{}",
+                            wasmprinter::print_bytes(candidate.get_binary()).unwrap()
+                        );
                         println!("Verified.");
                         return true;
                     }
