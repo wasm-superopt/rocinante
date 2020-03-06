@@ -160,7 +160,6 @@ impl Superoptimizer {
             .min_by(|a, b| self.perf(a.instrs()).cmp(&self.perf(b.instrs())))
             .unwrap();
 
-        // TODO(taegyunkim): Remove NOP instructions
         println!(
             "{}",
             wasmprinter::print_bytes(best.to_module().to_bytes().unwrap()).unwrap()
