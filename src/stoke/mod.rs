@@ -3,7 +3,7 @@ use crate::{exec, parity_wasm_utils, solver};
 use parity_wasm::elements::{FuncBody, FunctionType, Instruction, Internal, Module};
 use rand::distributions::{Bernoulli, Distribution};
 use rand::Rng;
-use std::sync::mpsc::channel;
+use std::sync::mpsc::{channel, sync_channel};
 use std::thread;
 
 use self::transform::*;
@@ -81,6 +81,8 @@ impl Superoptimizer {
 
                 let (func_type, func_body) = parity_wasm_utils::func_by_name(&module, func_name);
 
+                let (res_sender, res_receiver) = sync_channel(num_workers);
+
                 // TODO(taegyunkim): Parallel processing.
                 for _ in 0..num_workers {
                     let option = self.options.clone();
@@ -88,8 +90,22 @@ impl Superoptimizer {
                     let func_name = String::from(func_name);
                     let func_type = func_type.clone();
                     let func_body = func_body.clone();
-                    thread::spawn(|| run(option, spec, func_name, func_type, func_body));
+                    let res_sender_i = res_sender.clone();
+                    thread::spawn(move || {
+                        res_sender_i
+                            .send(run(option, spec, func_name, func_type, func_body))
+                            .unwrap();
+                    });
                 }
+
+                let mut candidates = Vec::new();
+                for _ in 0..num_workers {
+                    if let Some(candidate) = res_receiver.recv().unwrap() {
+                        candidates.push(candidate);
+                    }
+                }
+
+                rank(&candidates);
             }
         }
     }
@@ -105,7 +121,6 @@ fn perf(instrs: &[Instruction]) -> u32 {
     cnt
 }
 
-#[allow(dead_code)]
 fn rank(candidates: &[Candidate]) {
     println!("Found {} programs", candidates.len());
 
@@ -172,7 +187,6 @@ fn run(
         interpreter.as_mut(),
         &mut candidate,
     ) {
-        candidate.strip_nops();
         if options.run_synthesis_only {
             return Some(candidate);
         }
@@ -184,7 +198,6 @@ fn run(
             interpreter.as_mut(),
             &mut candidate_for_opti,
         ) {
-            candidate.strip_nops();
             return Some(candidate_for_opti);
         }
 
@@ -227,6 +240,7 @@ fn do_run(
         {
             match z3solver.verify(&candidate.get_func_body()) {
                 solver::VerifyResult::Verified => {
+                    candidate.strip_nops();
                     println!(
                         "{}",
                         wasmprinter::print_bytes(candidate.get_binary()).unwrap()
