@@ -69,7 +69,7 @@ impl Superoptimizer {
         let module = Module::from_bytes(&self.spec).unwrap();
 
         // TODO(taegyunkim): Use num_cpus crate to appropriately set the number of workers.
-        let num_workers = 1;
+        let num_workers = num_cpus::get();
 
         let export_section = module
             .export_section()
@@ -241,14 +241,18 @@ fn do_run(
             match z3solver.verify(&candidate.get_func_body()) {
                 solver::VerifyResult::Verified => {
                     candidate.strip_nops();
-                    println!(
-                        "{}",
-                        wasmprinter::print_bytes(candidate.get_binary()).unwrap()
-                    );
-                    println!("Verified.");
+                    #[cfg(debug_assertions)]
+                    {
+                        println!(
+                            "{}",
+                            wasmprinter::print_bytes(candidate.get_binary()).unwrap()
+                        );
+                        println!("Verified.");
+                    }
                     return true;
                 }
                 solver::VerifyResult::CounterExample(values) => {
+                    #[cfg(debug_assertions)]
                     println!("Adding a new test case {:?}", values);
                     interpreter.add_test_case(values);
                     // Verifier finds one counterexample for now, so we update the
