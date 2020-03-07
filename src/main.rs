@@ -133,7 +133,7 @@ fn main() {
             );
             // TODO(taegyunkim): Propagate the template function.
             let optimizer = stoke::Superoptimizer::new(binary, options);
-            optimizer.run();
+            optimizer.optimize();
         }
     }
 }
