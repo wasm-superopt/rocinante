@@ -1,7 +1,7 @@
 pub mod wasmer;
 pub mod wasmtime;
 
-const NUM_TEST_CASES: usize = 16;
+const NUM_TEST_CASES: usize = 32;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumString)]
 pub enum InterpreterKind {
