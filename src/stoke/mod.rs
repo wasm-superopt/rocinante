@@ -156,7 +156,7 @@ impl Superoptimizer {
         #[cfg(debug_assertions)]
         println!("Found {} programs", candidates.len());
 
-        let best = candidates
+        let _best = candidates
             .iter()
             .min_by(|a, b| self.perf(a.instrs()).cmp(&self.perf(b.instrs())))
             .unwrap();
@@ -164,7 +164,7 @@ impl Superoptimizer {
         #[cfg(debug_assertions)]
         println!(
             "{}",
-            wasmprinter::print_bytes(best.to_module().to_bytes().unwrap()).unwrap()
+            wasmprinter::print_bytes(_best.to_module().to_bytes().unwrap()).unwrap()
         );
     }
 
