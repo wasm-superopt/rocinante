@@ -63,11 +63,6 @@ fn main() {
         )
         .arg(Arg::with_name("beta").short("b").default_value("0.2"))
         .arg(
-            Arg::with_name("beta parameter")
-                .short("b")
-                .default_value("0.1"),
-        )
-        .arg(
             Arg::with_name("run_synthesis_only")
                 .short("s")
                 .help("Run synthesis step only and skip optimization step."),
