@@ -264,12 +264,13 @@ impl Superoptimizer {
                             #[cfg(debug_assertions)]
                             println!("accepted...");
                             curr_cost = new_cost;
-                            if curr_cost < interpreter.score_invalid() {
-                                println!("{}", curr_cost);
-                            }
                         }
                     }
                 }
+            }
+
+            if curr_cost < interpreter.score_invalid() {
+                println!("{}", curr_cost);
             }
         }
 
