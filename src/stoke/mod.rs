@@ -211,7 +211,6 @@ impl Superoptimizer {
                             );
                             println!("Verified.");
                         }
-                        println!("0");
                         return true;
                     }
                     solver::VerifyResult::CounterExample(values) => {
