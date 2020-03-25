@@ -57,10 +57,11 @@ fn main() {
         )
         .arg(
             Arg::with_name("compute_budget_in_min")
-                .short("b")
+                .short("c")
                 .help("The max runtime of one synthesis or optimization step in minutes")
-                .default_value("3"),
+                .default_value("5"),
         )
+        .arg(Arg::with_name("beta").short("b").default_value("0.2"))
         .arg(
             Arg::with_name("run_synthesis_only")
                 .short("s")
@@ -112,6 +113,7 @@ fn main() {
                     .unwrap(),
             );
             let run_synthesis_only = matches.is_present("run_synthesis_only");
+            let beta = matches.value_of("beta").unwrap().parse().unwrap();
 
             let options = stoke::SuperoptimizerOptions::new(
                 algorithm,
@@ -120,6 +122,7 @@ fn main() {
                 compute_budget,
                 run_synthesis_only,
                 constants,
+                beta,
             );
             // TODO(taegyunkim): Propagate the template function.
             let optimizer = stoke::Superoptimizer::new(binary, options);
