@@ -28,6 +28,58 @@ fn pop_cnts<'a>(ctx: &'a Context, instr_type: &DatatypeSort<'a>, instr: &Datatyp
 }
 
 #[allow(dead_code)]
+fn interpret_instr<'a>(
+    stack: &Datatype<'a>,
+    _locals: &Datatype<'a>,
+    instr_type: &DatatypeSort<'a>,
+    instr: &Datatype<'a>,
+) -> Datatype<'a> {
+    instr_type.variants[0]
+        .tester
+        .apply(&[&instr.clone().into()])
+        .as_bool()
+        .unwrap()
+        .ite(
+            // Here instr is variant 0, which means local.get(0), so we need to symbolically
+            // evaluate following
+            // stack.push(locals[0])
+            stack,
+            &instr_type.variants[1]
+                .tester
+                .apply(&[&instr.clone().into()])
+                .as_bool()
+                .unwrap()
+                .ite(
+                    // Here instr is variant 1 which means it's a I32.add, so we need to
+                    // symbolically compute following
+                    // lhs = stack.pop()
+                    // rhs = stack.pop()
+                    // stack.push(lhs.bvadd(rhs))
+                    stack,
+                    // Here instr is variant 2, so it's a NOP, we don't do anything and simply
+                    // return stack.
+                    stack,
+                ),
+        )
+}
+
+#[allow(dead_code)]
+fn interpret<'a>(
+    ctx: &'a Context,
+    locals: &Datatype<'a>,
+    instr_type: &DatatypeSort<'a>,
+    instrs: &[Datatype<'a>],
+) {
+    // Define a symbolic datatype stack, but I don't know how to do in rust-z3.
+    // so just use Int sort to make it compile.
+    let mut stack = Datatype::new_const(&ctx, "stack", &z3::Sort::int(&ctx));
+
+    for instr in instrs {
+        stack = interpret_instr(&stack, &locals, &instr_type, &instr);
+    }
+}
+
+#[allow(dead_code)]
 fn pop_cnts_map<'a>(
     ctx: &'a Context,
     instr_type: &DatatypeSort<'a>,
