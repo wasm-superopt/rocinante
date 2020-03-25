@@ -19,20 +19,6 @@ fn wasmtime_invoke(binary: &[u8], func_name: &str, inputs: &[i32]) {
     }
 }
 
-fn wasmi_invoke(binary: &[u8], func_name: &str, inputs: &[i32]) {
-    use wasmi::*;
-
-    let module = wasmi::Module::from_buffer(&binary).expect("failed to load wasm.");
-    let instance = ModuleInstance::new(&module, &ImportsBuilder::default())
-        .unwrap()
-        .assert_no_start();
-    for input in inputs {
-        let _result = instance
-            .invoke_export(func_name, &[RuntimeValue::I32(*input)], &mut NopExternals)
-            .unwrap();
-    }
-}
-
 fn wasmer_invoke(binary: &[u8], func_name: &str, inputs: &[i32]) {
     use wasmer_runtime::*;
 
