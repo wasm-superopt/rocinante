@@ -24,6 +24,7 @@ pub struct SuperoptimizerOptions {
     compute_budget: chrono::Duration,
     run_synthesis_only: bool,
     constants: Vec<i32>,
+    beta: f64,
 }
 
 // TODO(taegyunkim): Use structopt https://docs.rs/structopt/0.3.9/structopt/index.html
@@ -35,6 +36,7 @@ impl SuperoptimizerOptions {
         compute_budget: chrono::Duration,
         run_synthesis_only: bool,
         constants: Vec<i32>,
+        beta: f64,
     ) -> Self {
         Self {
             algorithm,
@@ -43,6 +45,7 @@ impl SuperoptimizerOptions {
             compute_budget,
             run_synthesis_only,
             constants,
+            beta,
         }
     }
 }
@@ -239,8 +242,9 @@ impl Superoptimizer {
                     } else {
                         // Following computes min(1, exp(-0.4 * new_cost/ curr_cost))
                         // TODO(taegyunkim): Use parameter \beta instead of -0.4
-                        let p: f64 =
-                            (1.0 as f64).min((-0.2 * (new_cost as f64) / (curr_cost as f64)).exp());
+                        let p: f64 = (1.0 as f64).min(
+                            (-self.options.beta * (new_cost as f64) / (curr_cost as f64)).exp(),
+                        );
                         let d = Bernoulli::new(p).unwrap();
                         #[cfg(debug_assertions)]
                         println!("p: {}", p);
