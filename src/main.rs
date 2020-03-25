@@ -92,6 +92,7 @@ fn main() {
 
         // TODO(taegyunkim): Get this from commandline.
         let constants = vec![-2, -1, 0, 1, 2];
+        #[cfg(debug_assertions)]
         println!(
             "{}",
             wasmprinter::print_bytes(&binary).expect("Failed to convert to .wat")

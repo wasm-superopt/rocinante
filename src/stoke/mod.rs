@@ -153,16 +153,18 @@ impl Superoptimizer {
     }
 
     pub fn rank(&self, candidates: &[Candidate]) {
+        #[cfg(debug_assertions)]
         println!("Found {} programs", candidates.len());
 
-        let best = candidates
+        let _best = candidates
             .iter()
             .min_by(|a, b| self.perf(a.instrs()).cmp(&self.perf(b.instrs())))
             .unwrap();
 
+        #[cfg(debug_assertions)]
         println!(
             "{}",
-            wasmprinter::print_bytes(best.to_module().to_bytes().unwrap()).unwrap()
+            wasmprinter::print_bytes(_best.to_module().to_bytes().unwrap()).unwrap()
         );
     }
 
@@ -193,20 +195,26 @@ impl Superoptimizer {
             let _ = tx.send(());
         });
 
+        println!("{}", curr_cost);
+
         loop {
             if (mode == Mode::Optimization && curr_cost < initial_cost)
                 || (mode == Mode::Synthesis && curr_cost == 0)
             {
                 match z3solver.verify(&candidate.get_func_body()) {
                     solver::VerifyResult::Verified => {
-                        println!(
-                            "{}",
-                            wasmprinter::print_bytes(candidate.get_binary()).unwrap()
-                        );
-                        println!("Verified.");
+                        #[cfg(debug_assertions)]
+                        {
+                            println!(
+                                "{}",
+                                wasmprinter::print_bytes(candidate.get_binary()).unwrap()
+                            );
+                            println!("Verified.");
+                        }
                         return true;
                     }
                     solver::VerifyResult::CounterExample(values) => {
+                        #[cfg(debug_assertions)]
                         println!("Adding a new test case {:?}", values);
                         interpreter.add_test_case(values);
                         // Verifier finds one counterexample for now, so we update the
@@ -217,6 +225,7 @@ impl Superoptimizer {
             }
 
             if rx.try_recv().is_ok() {
+                #[cfg(debug_assertions)]
                 println!("{:?} timed out", mode);
                 break;
             }
@@ -257,6 +266,10 @@ impl Superoptimizer {
                         }
                     }
                 }
+            }
+
+            if curr_cost < interpreter.score_invalid() {
+                println!("{}", curr_cost);
             }
         }
 
