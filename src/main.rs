@@ -3,19 +3,9 @@ extern crate rocinante;
 use clap::{App, Arg, SubCommand};
 use rocinante::{exec, stoke};
 use std::env;
-use std::fs::File;
-use std::io;
-use std::io::prelude::*;
 use std::path::Path;
 use std::str;
 use std::str::FromStr;
-
-fn read_wasm(file: &str) -> io::Result<Vec<u8>> {
-    let mut data = Vec::new();
-    let mut f = File::open(file)?;
-    f.read_to_end(&mut data)?;
-    Ok(data)
-}
 
 fn parse_module_from_wast(file: &str) -> Vec<Vec<u8>> {
     let contents = std::fs::read_to_string(file).unwrap();
@@ -87,7 +77,7 @@ fn main() {
 
     // Read the input file into binary format.
     let binaries: Vec<Vec<u8>> = match ext {
-        "wasm" => vec![read_wasm(input).unwrap()],
+        "wasm" => vec![std::fs::read(input).unwrap()],
         "wat" => vec![wat::parse_file(input).unwrap()],
         "wast" => parse_module_from_wast(input),
         _ => panic!("{}: unrecognized file type", input),
