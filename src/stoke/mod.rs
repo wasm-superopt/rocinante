@@ -125,6 +125,7 @@ impl Superoptimizer {
                     interpreter.eval_test_cases(&binary)
                 }
                 StackState::Invalid(cnt) => {
+                    // If the program is invalid we penalize it the stack value count difference.
                     interpreter.score_invalid()
                         + (i32::abs(interpreter.return_type_len() as i32 - cnt) as u32 + 1)
                 }
