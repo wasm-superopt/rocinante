@@ -125,12 +125,8 @@ impl Superoptimizer {
                     interpreter.eval_test_cases(&binary)
                 }
                 StackState::Invalid(cnt) => {
-                    if cnt == (interpreter.return_type_len() as i32) {
-                        interpreter.score_invalid()
-                    } else {
-                        interpreter.score_invalid()
-                            * i32::abs(interpreter.return_type_len() as i32 - cnt) as u32
-                    }
+                    interpreter.score_invalid()
+                        + (i32::abs(interpreter.return_type_len() as i32 - cnt) as u32 + 1)
                 }
             }
         } else {
