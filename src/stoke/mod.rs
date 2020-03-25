@@ -12,13 +12,13 @@ pub use self::candidate::*;
 mod candidate;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumString)]
-pub enum Algorithm {
+pub enum Sampler {
     Random,
-    Stoke,
+    MCMC,
 }
 
 pub struct SuperoptimizerOptions {
-    algorithm: Algorithm,
+    sampler: Sampler,
     interpreter_kind: InterpreterKind,
     enforce_stack_check: bool,
     compute_budget: chrono::Duration,
@@ -30,7 +30,7 @@ pub struct SuperoptimizerOptions {
 // TODO(taegyunkim): Use structopt https://docs.rs/structopt/0.3.9/structopt/index.html
 impl SuperoptimizerOptions {
     pub fn new(
-        algorithm: Algorithm,
+        sampler: Sampler,
         interpreter_kind: InterpreterKind,
         enforce_stack_check: bool,
         compute_budget: chrono::Duration,
@@ -39,7 +39,7 @@ impl SuperoptimizerOptions {
         beta: f64,
     ) -> Self {
         Self {
-            algorithm,
+            sampler,
             interpreter_kind,
             enforce_stack_check,
             compute_budget,
@@ -227,12 +227,12 @@ impl Superoptimizer {
 
             #[cfg(debug_assertions)]
             println!("curr_cost: {}, new_cost: {}", curr_cost, new_cost);
-            match self.options.algorithm {
-                Algorithm::Random => {
+            match self.options.sampler {
+                Sampler::Random => {
                     // Always accept transform.
                     curr_cost = new_cost;
                 }
-                Algorithm::Stoke => {
+                Sampler::MCMC => {
                     if new_cost < curr_cost {
                         // Accept this transform.
                         curr_cost = new_cost;
