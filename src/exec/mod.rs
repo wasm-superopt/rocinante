@@ -1,12 +1,16 @@
+use clap::arg_enum;
+
 pub mod wasmer;
 pub mod wasmtime;
 
 const NUM_TEST_CASES: usize = 16;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumString)]
-pub enum InterpreterKind {
-    Wasmer,
-    Wasmtime,
+arg_enum! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum InterpreterKind {
+        Wasmer,
+        Wasmtime,
+    }
 }
 
 pub trait Interpreter {
