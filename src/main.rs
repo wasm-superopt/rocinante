@@ -21,7 +21,7 @@ fn parse_module_from_wast(file: impl AsRef<Path>) -> Vec<Vec<u8>> {
 }
 
 fn main() {
-    let options = stoke::SuperoptimizerOpts::from_args();
+    let options = rocinante::SuperoptimizerOpts::from_args();
 
     // Parse the extension of the input file.
     let ext = Path::new(&options.input)
