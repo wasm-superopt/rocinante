@@ -31,7 +31,7 @@ pub enum Algorithm {
 }
 
 #[derive(Clone, Debug, StructOpt)]
-#[structopt(name = "options", about = "Superoptimizer options.")]
+#[structopt(name = "rocinante", about = "WebAssembly Superoptimizer")]
 pub struct SuperoptimizerOpts {
     #[structopt(name = "FILE", parse(from_os_str))]
     pub input: PathBuf,

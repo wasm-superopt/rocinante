@@ -19,27 +19,45 @@
 $> cargo run -- help
 
 USAGE:
-    rocinante [FLAGS] [OPTIONS] <FILE> [SUBCOMMAND]
+    rocinante [FLAGS] [OPTIONS] <FILE> <SUBCOMMAND>
 
 FLAGS:
-    -e               Turn off optimization counting values on the stack
     -h, --help       Prints help information
-    -s               Run synthesis step only and skip optimization step.
+    -o, --no-opti    If set, run synthesis step only and skip optimization step, true by default.
     -V, --version    Prints version information
 
 OPTIONS:
-    -a <algorithm>                    Superoptimization algorithm to use. [default: Stoke]  [possible values: Random,
-                                      Stoke]
-    -b <compute_budget_in_min>        The max runtime of one synthesis or optimization step in minutes [default: 3]
-    -i <interpreter>                  Which interpreter to use for evaluating test cases. [default: Wasmer]  [possible
-                                      values: Wasmer, Wasmtime]
+    -c, --constants <constants>...
+            A comma separated list of integers for initial set of constants. [default: -2,-1,0,1,2]
+
+    -i, --interpreter-kind <interpreter-kind>
+            Which interpreter to use for evaluating test cases. [default: Wasmer]  [possible values: Wasmer, Wasmtime]
+
+    -t, --time-budget <time-budget>
+            The max runtime of one synthesis or optimization step in minutes. [default: 5]
+
 
 ARGS:
-    <FILE>    .wasm/.wat/.wast file to optimize
+    <FILE>
 
 SUBCOMMANDS:
     help     Prints this message or the help of the given subcommand(s)
-    print    Prints all functions in the given module.
+    stoke    Stochastic search specific options.
+```
+
+```shell
+$> cargo run -- stoke --help
+USAGE:
+    rocinante <FILE> stoke [FLAGS] [OPTIONS]
+
+FLAGS:
+    -e, --no-enforce-stack-check
+    -h, --help                      Prints help information
+    -V, --version                   Prints version information
+
+OPTIONS:
+    -b, --beta <beta>           [default: 0.2]
+    -s, --sampler <sampler>    The sampler algorithm to use [default: MCMC]  [possible values: Random, MCMC]
 ```
 
 ```shell
