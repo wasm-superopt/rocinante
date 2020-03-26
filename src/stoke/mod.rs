@@ -1,9 +1,10 @@
-use crate::exec::{Interpreter, InterpreterKind};
-use crate::{exec, parity_wasm_utils, solver};
+use crate::{exec, parity_wasm_utils, solver, Algorithm, SuperoptimizerOpts};
+use clap::arg_enum;
 use parity_wasm::elements::{Instruction, Internal, Module};
 use rand::distributions::{Bernoulli, Distribution};
 use rand::Rng;
 use std::sync::mpsc::channel;
+use structopt::StructOpt;
 
 use self::transform::*;
 pub mod transform;
@@ -11,43 +12,30 @@ pub mod whitelist;
 pub use self::candidate::*;
 mod candidate;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumString)]
-pub enum Algorithm {
-    Random,
-    Stoke,
-}
-
-pub struct SuperoptimizerOptions {
-    algorithm: Algorithm,
-    interpreter_kind: InterpreterKind,
-    enforce_stack_check: bool,
-    compute_budget: chrono::Duration,
-    run_synthesis_only: bool,
-    constants: Vec<i32>,
-    beta: f64,
-}
-
-// TODO(taegyunkim): Use structopt https://docs.rs/structopt/0.3.9/structopt/index.html
-impl SuperoptimizerOptions {
-    pub fn new(
-        algorithm: Algorithm,
-        interpreter_kind: InterpreterKind,
-        enforce_stack_check: bool,
-        compute_budget: chrono::Duration,
-        run_synthesis_only: bool,
-        constants: Vec<i32>,
-        beta: f64,
-    ) -> Self {
-        Self {
-            algorithm,
-            interpreter_kind,
-            enforce_stack_check,
-            compute_budget,
-            run_synthesis_only,
-            constants,
-            beta,
-        }
+arg_enum! {
+    #[derive(Clone, Debug)]
+    pub enum Sampler {
+        Random,
+        MCMC,
     }
+}
+
+#[derive(Clone, Debug, StructOpt)]
+#[structopt(name = "stoke_opts", about = "Stochastic search specific options.")]
+pub struct StokeOpts {
+    #[structopt(
+        short,
+        long,
+        help="The sampler algorithm to use",
+        possible_values=&Sampler::variants(),
+        default_value="MCMC")]
+    pub sampler: Sampler,
+
+    #[structopt(short, long="no-enforce-stack-check", parse(from_flag = std::ops::Not::not))]
+    pub enforce_stack_check: bool,
+
+    #[structopt(short, long, default_value = "0.2")]
+    pub beta: f64,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -58,12 +46,18 @@ enum Mode {
 
 pub struct Superoptimizer {
     spec: Vec<u8>,
-    options: SuperoptimizerOptions,
+    stoke_options: StokeOpts,
+    options: SuperoptimizerOpts,
 }
 
 impl Superoptimizer {
-    pub fn new(spec: Vec<u8>, options: SuperoptimizerOptions) -> Self {
-        Superoptimizer { spec, options }
+    pub fn new(spec: Vec<u8>, options: SuperoptimizerOpts) -> Self {
+        let Algorithm::Stoke(stoke_options) = options.algorithm.clone();
+        Superoptimizer {
+            spec,
+            stoke_options,
+            options,
+        }
     }
 
     pub fn run(&self) {
@@ -96,7 +90,7 @@ impl Superoptimizer {
                         candidate.strip_nops();
                         candidates.push(candidate.clone());
 
-                        if self.options.run_synthesis_only {
+                        if !self.options.opti {
                             continue;
                         }
 
@@ -115,10 +109,10 @@ impl Superoptimizer {
     fn eval_candidate(
         &self,
         mode: Mode,
-        interpreter: &dyn Interpreter,
+        interpreter: &dyn exec::Interpreter,
         candidate: &mut Candidate,
     ) -> u32 {
-        let mut cost = if self.options.enforce_stack_check {
+        let mut cost = if self.stoke_options.enforce_stack_check {
             match candidate.check_stack() {
                 StackState::Valid => {
                     let binary = candidate.get_binary();
@@ -169,7 +163,7 @@ impl Superoptimizer {
     fn do_run(
         &self,
         mode: Mode,
-        interpreter: &mut dyn Interpreter,
+        interpreter: &mut dyn exec::Interpreter,
         candidate: &mut Candidate,
     ) -> bool {
         let func_type = candidate.spec_func_type();
@@ -189,9 +183,12 @@ impl Superoptimizer {
         let (tx, rx) = channel();
 
         // It's necessary to name this variable to trigger the callback.
-        let _guard = timer.schedule_with_delay(self.options.compute_budget, move || {
-            let _ = tx.send(());
-        });
+        let _guard = timer.schedule_with_delay(
+            chrono::Duration::minutes(self.options.time_budget),
+            move || {
+                let _ = tx.send(());
+            },
+        );
 
         loop {
             if (mode == Mode::Optimization && curr_cost < initial_cost)
@@ -227,12 +224,12 @@ impl Superoptimizer {
 
             #[cfg(debug_assertions)]
             println!("curr_cost: {}, new_cost: {}", curr_cost, new_cost);
-            match self.options.algorithm {
-                Algorithm::Random => {
+            match self.stoke_options.sampler {
+                Sampler::Random => {
                     // Always accept transform.
                     curr_cost = new_cost;
                 }
-                Algorithm::Stoke => {
+                Sampler::MCMC => {
                     if new_cost < curr_cost {
                         // Accept this transform.
                         curr_cost = new_cost;
@@ -240,7 +237,8 @@ impl Superoptimizer {
                         // Following computes min(1, exp(-0.4 * new_cost/ curr_cost))
                         // TODO(taegyunkim): Use parameter \beta instead of -0.4
                         let p: f64 = (1.0 as f64).min(
-                            (-self.options.beta * (new_cost as f64) / (curr_cost as f64)).exp(),
+                            (-self.stoke_options.beta * (new_cost as f64) / (curr_cost as f64))
+                                .exp(),
                         );
                         let d = Bernoulli::new(p).unwrap();
                         #[cfg(debug_assertions)]
