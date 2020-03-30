@@ -20,6 +20,7 @@ use crate::stoke::StokeOpts;
 use std::path::PathBuf;
 use structopt::StructOpt;
 
+pub mod enumerative;
 pub mod exec;
 pub mod parity_wasm_utils;
 pub mod solver;
