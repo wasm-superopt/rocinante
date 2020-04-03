@@ -1,6 +1,5 @@
 extern crate rocinante;
 
-use rocinante::stoke;
 use std::path::Path;
 use structopt::StructOpt;
 
@@ -52,7 +51,7 @@ fn main() {
             wasmprinter::print_bytes(&binary).expect("Failed to convert to .wat")
         );
         // TODO(taegyunkim): Propagate the template function.
-        let optimizer = stoke::Superoptimizer::new(binary, options.clone());
+        let optimizer = rocinante::Superoptimizer::new(binary, options.clone());
         optimizer.run();
     }
 }
