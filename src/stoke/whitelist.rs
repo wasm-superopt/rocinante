@@ -46,7 +46,7 @@ const LOCALOP: [Instruction; 3] = [
     Instruction::TeeLocal(0),
 ];
 
-const WHITELIST: [Instruction; 34] = [
+pub const WHITELIST: [Instruction; 34] = [
     // i32 binop
     Instruction::I32Add,
     Instruction::I32Sub,
