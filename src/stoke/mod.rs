@@ -1,8 +1,7 @@
-use crate::{exec, perf, solver, Mode, SuperoptimizerOpts};
+use crate::{exec, perf, solver, Mode};
 use clap::arg_enum;
 use rand::distributions::{Bernoulli, Distribution};
 use rand::Rng;
-use std::sync::mpsc::channel;
 use structopt::StructOpt;
 
 use self::transform::*;
@@ -67,60 +66,35 @@ fn eval_candidate(
     cost
 }
 
-pub fn do_run(
-    options: &SuperoptimizerOpts,
+pub fn search(
     stoke_options: &StokeOpts,
     mode: Mode,
+    rx: &std::sync::mpsc::Receiver<()>,
+    z3_solver: &solver::Z3Solver,
     interpreter: &mut dyn exec::Interpreter,
     candidate: &mut Candidate,
-) -> bool {
-    let func_type = candidate.spec_func_type();
-    let func_body = candidate.get_spec_func_body();
-
-    let cfg = z3::Config::new();
-    let ctx = z3::Context::new(&cfg);
-    let z3solver = solver::Z3Solver::new(&ctx, func_type, func_body);
-
+) -> Option<Candidate> {
     let mut rng = rand::thread_rng();
-
     let mut curr_cost = eval_candidate(stoke_options, mode, interpreter, candidate);
-
     let initial_cost = curr_cost;
-
-    let timer = timer::Timer::new();
-    let (tx, rx) = channel();
-
-    // It's necessary to name this variable to trigger the callback.
-    let _guard =
-        timer.schedule_with_delay(chrono::Duration::minutes(options.time_budget), move || {
-            let _ = tx.send(());
-        });
 
     loop {
         if (mode == Mode::Optimization && curr_cost < initial_cost)
             || (mode == Mode::Synthesis && curr_cost == 0)
         {
-            match z3solver.verify(&candidate.get_func_body()) {
+            match z3_solver.verify(&candidate.get_func_body()) {
                 solver::VerifyResult::Verified => {
-                    println!(
-                        "{}",
-                        wasmprinter::print_bytes(candidate.get_binary()).unwrap()
-                    );
-                    println!("Verified.");
-                    return true;
+                    return Some(candidate.clone());
                 }
                 solver::VerifyResult::CounterExample(values) => {
-                    println!("Adding a new test case {:?}", values);
                     interpreter.add_test_case(values);
-                    // Verifier finds one counterexample for now, so we update the
-                    // cost to be the number of bits for return value type.
                     curr_cost = interpreter.return_bit_width();
                 }
             }
         }
 
         if rx.try_recv().is_ok() {
-            println!("{:?} timed out", mode);
+            println!("Stochastic search {:?} timed out", mode);
             break;
         }
 
@@ -162,5 +136,5 @@ pub fn do_run(
         }
     }
 
-    false
+    None
 }
