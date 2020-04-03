@@ -31,6 +31,7 @@ pub mod stoke;
 #[derive(Clone, Debug, StructOpt)]
 pub enum Algorithm {
     Stoke(StokeOpts),
+    Enumerative,
 }
 
 #[derive(Clone, Debug, StructOpt)]
@@ -178,6 +179,9 @@ impl Superoptimizer {
                     interpreter.as_mut(),
                     &mut candidate,
                 );
+            }
+            Algorithm::Enumerative => {
+                return enumerative::search(&rx, &z3_solver, interpreter.as_mut(), &mut candidate);
             }
         }
     }
