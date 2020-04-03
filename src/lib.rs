@@ -17,7 +17,8 @@ extern crate wat;
 
 use crate::exec::InterpreterKind;
 use crate::stoke::StokeOpts;
-use parity_wasm::elements::{Instruction, Internal, Module};
+use parity_wasm::elements::{FuncBody, FunctionType, Instruction, Internal, Module};
+
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -83,18 +84,12 @@ pub enum Mode {
 
 pub struct Superoptimizer {
     spec: Vec<u8>,
-    stoke_options: StokeOpts,
     options: SuperoptimizerOpts,
 }
 
 impl Superoptimizer {
     pub fn new(spec: Vec<u8>, options: SuperoptimizerOpts) -> Self {
-        let Algorithm::Stoke(stoke_options) = options.algorithm.clone();
-        Superoptimizer {
-            spec,
-            stoke_options,
-            options,
-        }
+        Superoptimizer { spec, options }
     }
 
     pub fn run(&self) {
@@ -116,36 +111,28 @@ impl Superoptimizer {
 
                 // TODO(taegyunkim): Parallel processing.
                 for _ in 0..num_workers {
-                    // NOTE(taegyunkim): Interpreter is not thread safe.
-                    let mut interpreter =
-                        exec::get_interpreter(self.options.interpreter_kind, &self.spec, func_name);
-
-                    let mut candidate =
-                        stoke::Candidate::new(func_type, func_body, self.options.constants.clone());
-
-                    if stoke::do_run(
+                    if let Some(mut candidate) = self.invoke_search(
+                        func_name,
+                        func_type,
+                        func_body,
                         &self.options,
-                        &self.stoke_options,
                         Mode::Synthesis,
-                        interpreter.as_mut(),
-                        &mut candidate,
                     ) {
                         candidate.strip_nops();
                         candidates.push(candidate.clone());
-
                         if !self.options.opti {
                             continue;
                         }
 
-                        if stoke::do_run(
+                        if let Some(mut candidate) = self.invoke_search(
+                            func_name,
+                            func_type,
+                            func_body,
                             &self.options,
-                            &self.stoke_options,
                             Mode::Optimization,
-                            interpreter.as_mut(),
-                            &mut candidate,
                         ) {
                             candidate.strip_nops();
-                            candidates.push(candidate);
+                            candidates.push(candidate.clone());
                         }
                     }
                 }
@@ -153,6 +140,46 @@ impl Superoptimizer {
         }
 
         rank(&candidates);
+    }
+
+    fn invoke_search(
+        &self,
+        func_name: &str,
+        func_type: &FunctionType,
+        func_body: &FuncBody,
+        options: &SuperoptimizerOpts,
+        mode: Mode,
+    ) -> Option<stoke::Candidate> {
+        // NOTE(taegyunkim): Interpreter is not thread safe.
+        let mut interpreter =
+            exec::get_interpreter(options.interpreter_kind, &self.spec, func_name);
+
+        let mut candidate = stoke::Candidate::new(func_type, func_body, options.constants.clone());
+
+        let cfg = z3::Config::new();
+        let ctx = z3::Context::new(&cfg);
+        let z3_solver = solver::Z3Solver::new(&ctx, func_type, func_body);
+
+        let timer = timer::Timer::new();
+        let (tx, rx) = std::sync::mpsc::channel();
+        // It's necessary to name this variable to trigger the callback.
+        let _guard =
+            timer.schedule_with_delay(chrono::Duration::minutes(options.time_budget), move || {
+                let _ = tx.send(());
+            });
+
+        match &options.algorithm {
+            Algorithm::Stoke(stoke_options) => {
+                return stoke::search(
+                    stoke_options,
+                    mode,
+                    &rx,
+                    &z3_solver,
+                    interpreter.as_mut(),
+                    &mut candidate,
+                );
+            }
+        }
     }
 }
 
