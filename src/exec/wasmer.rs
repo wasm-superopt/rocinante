@@ -66,8 +66,11 @@ impl Interpreter for Wasmer {
         let mut dist = 0;
         for (input, expected_output) in &self.test_cases {
             let actual_output = func.call(&input);
+
+            println!("{:?} {:?} {:?}", input, actual_output, expected_output);
             dist += hamming_distance(&expected_output, &actual_output);
         }
+        println!("hamming distance {}", dist);
         dist
     }
 

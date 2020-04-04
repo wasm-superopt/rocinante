@@ -16,24 +16,40 @@ pub fn search(
             return None;
         }
 
+        println!(
+            "{}",
+            wasmprinter::print_bytes(candidate.to_module().to_bytes().unwrap()).unwrap()
+        );
         match candidate.try_append(instr) {
             Ok(()) => {
+                println!("num values on stack: {}", candidate.num_values_on_stack);
                 if candidate.num_values_on_stack == 1 {
                     if interpreter.eval_test_cases(candidate.get_binary()) == 0 {
+                        println!("Passed all test cases.");
                         match z3_solver.verify(&candidate.get_func_body()) {
-                            solver::VerifyResult::Verified => return Some(candidate.clone()),
+                            solver::VerifyResult::Verified => {
+                                println!("Verified");
+                                return Some(candidate.clone());
+                            }
                             solver::VerifyResult::CounterExample(values) => {
+                                println!("Added counter example");
                                 interpreter.add_test_case(values);
-                                candidate.drop_last();
                             }
                         }
+                    } else {
+                        println!("didn't pass all the test cases.");
+
+                        println!(
+                            "{}",
+                            wasmprinter::print_bytes(candidate.to_module().to_bytes().unwrap())
+                                .unwrap()
+                        );
                     }
-                } else {
-                    match search(rx, z3_solver, interpreter, candidate) {
-                        Some(candidate) => return Some(candidate),
-                        None => {
-                            candidate.drop_last();
-                        }
+                }
+                match search(rx, z3_solver, interpreter, candidate) {
+                    Some(candidate) => return Some(candidate),
+                    None => {
+                        candidate.drop_last();
                     }
                 }
             }
