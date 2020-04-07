@@ -39,9 +39,8 @@ pub fn search(
         }
 
         let program = candidates.pop().unwrap();
-        if program.num_values_on_stack() == 1 {
+        if program.num_values_on_stack() == program.return_type_len() {
             candidate.instrs_mut().clone_from_slice(program.instrs());
-            println!("{:?}", program.instrs());
             if interpreter.eval_test_cases(candidate.get_binary()) == 0 {
                 match z3_solver.verify(&candidate.get_func_body()) {
                     solver::VerifyResult::Verified => {

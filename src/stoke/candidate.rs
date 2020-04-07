@@ -198,51 +198,6 @@ impl Candidate {
     pub fn check_stack(&self) -> StackState {
         check_instrs(self.instrs())
     }
-
-    /// Attempts to append the given instruction to the current candidate program.
-    ///
-    /// This class internally keeps track of at which index it needs to append a new instruction
-    /// given by this method. If the index becomes greater than or equal to the length of
-    /// internal instruction list, this method returns an error.
-    pub fn try_append(&mut self, instr: Instruction) -> Result<(), AppendError> {
-        println!("{} {}", self.next_index, instr);
-
-        if self.next_index >= self.instrs().len() {
-            println!("Next index out of bounds");
-            return Err(AppendError::NextIndexOutOfBounds);
-        }
-
-        let (pop_cnts, push_cnts) = whitelist::stack_cnt(&instr);
-        if self.num_values_on_stack - pop_cnts < 0 {
-            println!("stack underflow");
-            return Err(AppendError::StackUnderflow);
-        }
-
-        let return_type_len = 1;
-        let num_instrs_left = (self.instrs().len() - self.next_index - 1) as i32;
-
-        if return_type_len < self.num_values_on_stack - pop_cnts + push_cnts - num_instrs_left {
-            println!("stack overflow");
-            return Err(AppendError::StackOverflow);
-        }
-
-        self.instrs[self.next_index] = instr;
-        self.num_values_on_stack -= pop_cnts;
-        self.num_values_on_stack += push_cnts;
-        self.next_index += 1;
-
-        Ok(())
-    }
-
-    pub fn drop_last(&mut self) {
-        self.next_index -= 1;
-        let instr = &self.instrs[self.next_index];
-        let (pop_cnts, push_cnts) = whitelist::stack_cnt(instr);
-
-        self.num_values_on_stack += pop_cnts;
-        self.num_values_on_stack -= push_cnts;
-        self.instrs[self.next_index] = Instruction::Nop;
-    }
 }
 
 pub fn check_instrs(instrs: &[Instruction]) -> StackState {

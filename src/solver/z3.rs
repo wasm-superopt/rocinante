@@ -166,7 +166,6 @@ impl<'ctx> Converter<'ctx> {
     // TODO(taegyunkim): Add test for each case.
     pub fn convert_func(&self, func: &FuncBody) -> ast::Dynamic<'ctx> {
         let mut locals: Vec<ast::Dynamic<'ctx>> = self.init_locals(func.locals());
-        println!("{:?}", locals);
         let mut stack: ValueStack<'ctx> = ValueStack::new();
         for instr in func.code().elements() {
             match instr {
@@ -415,7 +414,6 @@ pub struct Z3Solver<'ctx> {
 
 impl<'ctx> Z3Solver<'ctx> {
     pub fn new(ctx: &'ctx Context, func_type: &FunctionType, spec: &FuncBody) -> Self {
-        println!("{:?}", spec);
         let converter = Converter::new(ctx, func_type);
         let spec_f = converter.convert_func(spec);
         Self {
@@ -426,7 +424,6 @@ impl<'ctx> Z3Solver<'ctx> {
     }
 
     pub fn verify(&self, candidate: &FuncBody) -> VerifyResult {
-        println!("{:?}", candidate);
         let candidate_f = self.converter.convert_func(candidate);
         let solver = Solver::new(&self.ctx);
 

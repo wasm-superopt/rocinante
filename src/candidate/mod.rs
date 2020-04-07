@@ -15,7 +15,6 @@ pub struct Candidate {
     num_values_on_stack: i32,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum AppendError {
     NextIndexOutOfBounds,
@@ -24,7 +23,6 @@ pub enum AppendError {
 }
 
 impl Candidate {
-    #[allow(dead_code)]
     /// New WASM program with given length.
     pub fn new(length: usize) -> Self {
         Self {
@@ -36,7 +34,6 @@ impl Candidate {
         }
     }
 
-    #[allow(dead_code)]
     /// Attempts to append the instruction to current program and returns a new candidate.
     pub fn try_append(&self, instr: Instruction) -> Result<Self, AppendError> {
         if self.next_index >= self.instrs.len() {
@@ -68,17 +65,14 @@ impl Candidate {
         &self.instrs
     }
 
-    #[allow(dead_code)]
     pub fn return_type_len(&self) -> i32 {
         self.return_type_len
     }
 
-    #[allow(dead_code)]
     pub fn next_index(&self) -> usize {
         self.next_index
     }
 
-    #[allow(dead_code)]
     pub fn num_values_on_stack(&self) -> i32 {
         self.num_values_on_stack
     }
