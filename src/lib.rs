@@ -171,18 +171,16 @@ impl Superoptimizer {
             });
 
         match &options.algorithm {
-            Algorithm::Stoke(stoke_options) => {
-                return stoke::search(
-                    stoke_options,
-                    mode,
-                    &rx,
-                    &z3_solver,
-                    interpreter.as_mut(),
-                    &mut candidate,
-                );
-            }
+            Algorithm::Stoke(stoke_options) => stoke::search(
+                stoke_options,
+                mode,
+                &rx,
+                &z3_solver,
+                interpreter.as_mut(),
+                &mut candidate,
+            ),
             Algorithm::Enumerative => {
-                return enumerative::search(&rx, &z3_solver, interpreter.as_mut(), &mut candidate);
+                enumerative::search(&rx, &z3_solver, interpreter.as_mut(), &mut candidate)
             }
         }
     }
