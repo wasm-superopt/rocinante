@@ -11,7 +11,7 @@ use rand::Rng;
 pub struct Candidate {
     // Fields representing the spec.
     spec_func_type: FunctionType,
-    spec_local_types: Vec<ValueType>,
+    pub spec_local_types: Vec<ValueType>,
     spec_func_body: FuncBody,
 
     /// This field contains WASM binary generated from above func_type, with function name
@@ -23,7 +23,7 @@ pub struct Candidate {
     // Below are fields representing current candidate.
     instrs: Vec<Instruction>,
     /// The list of constants to use for synthesis.
-    constants: Vec<i32>,
+    pub constants: Vec<i32>,
 
     next_index: usize,
     pub num_values_on_stack: i32,
@@ -170,8 +170,6 @@ impl Candidate {
         // to make this a valid function representation.
         let mut instrs = self.instrs.clone();
         instrs.push(Instruction::End);
-
-        println!("{:?}", instrs);
 
         FuncBody::new(locals, Instructions::new(instrs))
     }

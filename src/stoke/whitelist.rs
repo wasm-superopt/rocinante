@@ -3,7 +3,7 @@ use parity_wasm::elements::Instruction;
 use rand::seq::SliceRandom;
 use rand::Rng;
 
-const I32BINOP: [Instruction; 15] = [
+pub const I32BINOP: [Instruction; 15] = [
     Instruction::I32Add,
     Instruction::I32Sub,
     Instruction::I32Mul,
@@ -21,13 +21,13 @@ const I32BINOP: [Instruction; 15] = [
     Instruction::I32Rotr,
 ];
 
-const I32UNOP: [Instruction; 3] = [
+pub const I32UNOP: [Instruction; 3] = [
     Instruction::I32Clz,
     Instruction::I32Ctz,
     Instruction::I32Popcnt,
 ];
 
-const I32RELOP: [Instruction; 10] = [
+pub const I32RELOP: [Instruction; 10] = [
     Instruction::I32Eq,
     Instruction::I32Ne,
     Instruction::I32LtS,
@@ -40,7 +40,7 @@ const I32RELOP: [Instruction; 10] = [
     Instruction::I32GeU,
 ];
 
-const LOCALOP: [Instruction; 3] = [
+pub const LOCALOP: [Instruction; 3] = [
     Instruction::GetLocal(0),
     Instruction::SetLocal(0),
     Instruction::TeeLocal(0),

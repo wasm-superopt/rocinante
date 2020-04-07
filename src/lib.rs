@@ -22,6 +22,7 @@ use parity_wasm::elements::{FuncBody, FunctionType, Instruction, Internal, Modul
 use std::path::PathBuf;
 use structopt::StructOpt;
 
+mod candidate;
 pub mod enumerative;
 pub mod exec;
 pub mod parity_wasm_utils;

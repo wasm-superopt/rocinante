@@ -1,5 +1,5 @@
 use parity_wasm::elements::{FuncBody, FunctionType, Instruction, Local, ValueType};
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::fmt::Debug;
 use z3::{ast, ast::Ast, Context, Solver};
 
@@ -47,7 +47,7 @@ pub struct Converter<'ctx> {
 }
 
 fn ctz<'a>(ctx: &'a Context, input: &ast::BV<'a>) -> ast::BV<'a> {
-    let one_bit = ast::BV::from_u64(ctx, 1, 1);
+    let one_bit = ast::BV::from_u64(&ctx, 1, 1);
 
     fn ctz_helper<'a>(
         ctx: &'a z3::Context,
@@ -58,11 +58,11 @@ fn ctz<'a>(ctx: &'a Context, input: &ast::BV<'a>) -> ast::BV<'a> {
         let bit_width = input.get_size();
 
         if i == bit_width {
-            ast::BV::from_u64(ctx, i as u64, bit_width)
+            ast::BV::from_u64(&ctx, i as u64, bit_width)
         } else {
             input.extract(i, i)._eq(&one_bit).ite(
-                &ast::BV::from_u64(ctx, i as u64, bit_width),
-                &ctz_helper(ctx, input, one_bit, i + 1),
+                &ast::BV::from_u64(&ctx, i as u64, bit_width),
+                &ctz_helper(&ctx, input, one_bit, i + 1),
             )
         }
     }
@@ -134,7 +134,12 @@ impl<'ctx> Converter<'ctx> {
     }
 
     fn init_locals(&self, local_types: &[Local]) -> Vec<ast::Dynamic<'ctx>> {
-        let mut locals = self.z3_params.clone();
+        let mut locals: Vec<ast::Dynamic<'ctx>> = Vec::new();
+
+        for param in self.z3_params.iter() {
+            locals.push(param.clone());
+        }
+
         locals.reserve(local_types.len());
 
         for local in local_types {
@@ -160,7 +165,8 @@ impl<'ctx> Converter<'ctx> {
 
     // TODO(taegyunkim): Add test for each case.
     pub fn convert_func(&self, func: &FuncBody) -> ast::Dynamic<'ctx> {
-        let mut locals = self.init_locals(func.locals());
+        let mut locals: Vec<ast::Dynamic<'ctx>> = self.init_locals(func.locals());
+        println!("{:?}", locals);
         let mut stack: ValueStack<'ctx> = ValueStack::new();
         for instr in func.code().elements() {
             match instr {
@@ -409,6 +415,7 @@ pub struct Z3Solver<'ctx> {
 
 impl<'ctx> Z3Solver<'ctx> {
     pub fn new(ctx: &'ctx Context, func_type: &FunctionType, spec: &FuncBody) -> Self {
+        println!("{:?}", spec);
         let converter = Converter::new(ctx, func_type);
         let spec_f = converter.convert_func(spec);
         Self {
@@ -419,10 +426,20 @@ impl<'ctx> Z3Solver<'ctx> {
     }
 
     pub fn verify(&self, candidate: &FuncBody) -> VerifyResult {
+        println!("{:?}", candidate);
         let candidate_f = self.converter.convert_func(candidate);
         let solver = Solver::new(&self.ctx);
 
-        solver.assert(&self.spec_f._eq(&candidate_f).not());
+        let exists: ast::Bool = ast::exists_const(
+            &self.ctx,
+            self.converter.bounds().as_slice(),
+            &[],
+            &self.spec_f._eq(&candidate_f).not().into(),
+        )
+        .try_into()
+        .unwrap();
+
+        solver.assert(&exists);
 
         match solver.check() {
             z3::SatResult::Sat => {
@@ -430,7 +447,7 @@ impl<'ctx> Z3Solver<'ctx> {
 
                 let mut values = Vec::new();
 
-                for (i, bound) in self.converter.bounds().iter().enumerate() {
+                for (i, bound) in self.converter.z3_params.iter().enumerate() {
                     let typ = self.converter.func_type.params()[i];
 
                     match typ {
@@ -571,9 +588,12 @@ mod tests {
             r#"(module
                 (type $t0 (func (param i32) (result i32)))
                 (func $add (type $t0) (param $p0 i32) (result i32)
-                  local.get $p0
-                  local.get $p0
-                  i32.add)
+                i32.const 0
+                local.get 0
+                i32.sub
+                local.get 0
+                i32.and
+                )
                 (export "add" (func $add)))"#,
         );
         let (spec_func_type, spec_func_body) = parity_wasm_utils::func_by_name(&spec_module, "add");
@@ -581,9 +601,12 @@ mod tests {
             r#"(module
                 (type $t0 (func (param i32) (result i32)))
                 (func $mul (type $t0) (param $p0 i32) (result i32)
-                  local.get $p0
-                  i32.const 3
-                  i32.mul)
+                i32.const 1
+                  local.get 0
+                  i32.ctz
+                  i32.shl
+
+                  )
                 (export "mul" (func $mul)))"#,
         );
         let (candidate_func_type, candidate_func_body) =
@@ -610,12 +633,13 @@ mod tests {
             let candidate_output = candidate_instance
                 .invoke_export("mul", &cex_vec, &mut wasmi::NopExternals)
                 .unwrap();
-            assert_ne!(spec_output, candidate_output);
 
             // Pass --nocapture to check following output.
             // $> cargo test -- --nocapture
             // [I32(-1)] Some(I32(-2)) Some(I32(-3))
             println!("{:?} {:?} {:?}", cex_vec, spec_output, candidate_output);
+
+            assert_ne!(spec_output, candidate_output);
         }
     }
 
