@@ -54,11 +54,8 @@ pub fn search(
         }
 
         for instr in &whitelist {
-            match program.try_append(instr.clone()) {
-                Ok(new_program) => {
-                    candidates.push(new_program);
-                }
-                Err(_) => {}
+            if let Ok(new_program) = program.try_append(instr.clone()) {
+                candidates.push(new_program);
             }
         }
         whitelist.shuffle(&mut rng);
