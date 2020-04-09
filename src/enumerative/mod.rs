@@ -1,4 +1,4 @@
-use crate::candidate as new_candidate;
+use crate::wasm::candidate as new_candidate;
 use crate::{exec, solver, stoke, stoke::Candidate};
 use parity_wasm::elements::Instruction;
 use rand::seq::SliceRandom;
