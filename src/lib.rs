@@ -26,6 +26,7 @@ pub mod exec;
 pub mod parity_wasm_utils;
 pub mod solver;
 pub mod stoke;
+pub mod wasm;
 
 #[derive(Clone, Debug, StructOpt)]
 pub enum Algorithm {
