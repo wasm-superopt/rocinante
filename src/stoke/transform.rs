@@ -1,5 +1,5 @@
 use crate::stoke::whitelist;
-use crate::stoke::Candidate;
+use crate::stoke::Spec;
 use parity_wasm::elements::Instruction;
 use rand::distributions::{Distribution, Standard};
 use rand::Rng;
@@ -53,7 +53,7 @@ impl Transform {
     pub fn operate<R: Rng + ?Sized>(
         &self,
         rng: &mut R,
-        candidate_func: &mut Candidate,
+        candidate_func: &mut Spec,
     ) -> TransformInfo {
         match self.kind() {
             TransformKind::Opcode => self.opcode(rng, candidate_func),
@@ -63,7 +63,7 @@ impl Transform {
         }
     }
 
-    pub fn undo(&self, transform_info: &TransformInfo, candidate_func: &mut Candidate) {
+    pub fn undo(&self, transform_info: &TransformInfo, candidate_func: &mut Spec) {
         match transform_info.kind {
             TransformKind::Opcode | TransformKind::Operand | TransformKind::Instruction => {
                 candidate_func.instrs_mut()[transform_info.undo_indices[0]] =
@@ -78,11 +78,7 @@ impl Transform {
         }
     }
 
-    fn opcode<R: Rng + ?Sized>(
-        &self,
-        rng: &mut R,
-        candidate_func: &mut Candidate,
-    ) -> TransformInfo {
+    fn opcode<R: Rng + ?Sized>(&self, rng: &mut R, candidate_func: &mut Spec) -> TransformInfo {
         let (idx, undo_instr) = candidate_func.get_rand_instr(rng);
         let new_instr = whitelist::get_equiv_instr(rng, &undo_instr);
 
@@ -97,11 +93,7 @@ impl Transform {
         }
     }
 
-    fn operand<R: Rng + ?Sized>(
-        &self,
-        rng: &mut R,
-        candidate_func: &mut Candidate,
-    ) -> TransformInfo {
+    fn operand<R: Rng + ?Sized>(&self, rng: &mut R, candidate_func: &mut Spec) -> TransformInfo {
         let (instr_idx, undo_instr) = candidate_func.get_rand_instr(rng);
 
         let new_instr: Instruction = match &undo_instr {
@@ -135,7 +127,7 @@ impl Transform {
         }
     }
 
-    fn swap<R: Rng + ?Sized>(&self, rng: &mut R, candidate_func: &mut Candidate) -> TransformInfo {
+    fn swap<R: Rng + ?Sized>(&self, rng: &mut R, candidate_func: &mut Spec) -> TransformInfo {
         let (idx1, instr1) = candidate_func.get_rand_instr(rng);
         let (idx2, instr2) = candidate_func.get_rand_instr(rng);
 
@@ -152,7 +144,7 @@ impl Transform {
     fn instruction<R: Rng + ?Sized>(
         &self,
         rng: &mut R,
-        candidate_func: &mut Candidate,
+        candidate_func: &mut Spec,
     ) -> TransformInfo {
         let (instr_idx, undo_instr) = candidate_func.get_rand_instr(rng);
         let new_instr: Instruction = whitelist::sample(rng, candidate_func);
@@ -172,14 +164,14 @@ impl Transform {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::stoke::Candidate;
+    use crate::stoke::Spec;
     use parity_wasm::elements::{FuncBody, FunctionType, Instruction, Instructions, ValueType};
     #[test]
     fn opcode_transform_test() {
         let transform = Transform::new(TransformKind::Opcode);
         assert_eq!(transform.kind(), TransformKind::Opcode);
 
-        let original = Candidate::new(
+        let original = Spec::new(
             &FunctionType::new(vec![ValueType::I32], Some(ValueType::I32)),
             &FuncBody::new(
                 vec![],
@@ -212,7 +204,7 @@ mod test {
         let transform = Transform::new(TransformKind::Operand);
         assert_eq!(transform.kind(), TransformKind::Operand);
 
-        let original = Candidate::new(
+        let original = Spec::new(
             &FunctionType::new(vec![ValueType::I32], Some(ValueType::I32)),
             &FuncBody::new(
                 vec![],
@@ -245,7 +237,7 @@ mod test {
         let transform = Transform::new(TransformKind::Swap);
         assert_eq!(transform.kind(), TransformKind::Swap);
 
-        let original = Candidate::new(
+        let original = Spec::new(
             &FunctionType::new(vec![ValueType::I32], Some(ValueType::I32)),
             &FuncBody::new(
                 vec![],

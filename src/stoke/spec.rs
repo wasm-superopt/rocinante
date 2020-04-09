@@ -8,7 +8,7 @@ use rand::seq::SliceRandom;
 use rand::Rng;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Candidate {
+pub struct Spec {
     // Fields representing the spec.
     spec_func_type: FunctionType,
     spec_local_types: Vec<ValueType>,
@@ -32,7 +32,7 @@ pub enum StackState {
     Invalid(i32),
 }
 
-impl Candidate {
+impl Spec {
     pub fn new(
         spec_func_type: &FunctionType,
         spec_func_body: &FuncBody,

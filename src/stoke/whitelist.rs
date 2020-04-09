@@ -1,4 +1,4 @@
-use crate::stoke::Candidate;
+use crate::stoke::Spec;
 use parity_wasm::elements::Instruction;
 use rand::seq::SliceRandom;
 use rand::Rng;
@@ -92,7 +92,7 @@ const WHITELIST: [Instruction; 34] = [
 pub fn sample<R: Rng + ?Sized>(
     rng: &mut R,
     // TODO(taegyunkim): Support increasing the number of locals.
-    candidate_func: &mut Candidate,
+    candidate_func: &mut Spec,
 ) -> Instruction {
     let instr = WHITELIST.choose(rng).unwrap().clone();
     match instr {

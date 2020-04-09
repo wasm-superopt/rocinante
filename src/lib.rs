@@ -97,7 +97,7 @@ impl Superoptimizer {
 
         // TODO(taegyunkim): Use num_cpus crate to appropriately set the number of workers.
         let num_workers = 1;
-        let mut candidates: Vec<stoke::Candidate> = Vec::with_capacity(num_workers);
+        let mut candidates: Vec<stoke::Spec> = Vec::with_capacity(num_workers);
 
         let export_section = module
             .export_section()
@@ -149,12 +149,12 @@ impl Superoptimizer {
         func_body: &FuncBody,
         options: &SuperoptimizerOpts,
         mode: Mode,
-    ) -> Option<stoke::Candidate> {
+    ) -> Option<stoke::Spec> {
         // NOTE(taegyunkim): Interpreter is not thread safe.
         let mut interpreter =
             exec::get_interpreter(options.interpreter_kind, &self.spec, func_name);
 
-        let mut candidate = stoke::Candidate::new(func_type, func_body, options.constants.clone());
+        let mut candidate = stoke::Spec::new(func_type, func_body, options.constants.clone());
 
         let cfg = z3::Config::new();
         let ctx = z3::Context::new(&cfg);
@@ -171,6 +171,7 @@ impl Superoptimizer {
         match &options.algorithm {
             Algorithm::Stoke(stoke_options) => {
                 return stoke::search(
+                    options,
                     stoke_options,
                     mode,
                     &rx,
@@ -183,7 +184,7 @@ impl Superoptimizer {
     }
 }
 
-pub fn rank(candidates: &[stoke::Candidate]) {
+pub fn rank(candidates: &[stoke::Spec]) {
     println!("Found {} programs", candidates.len());
 
     let best = candidates

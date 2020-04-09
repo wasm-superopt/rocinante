@@ -1,4 +1,4 @@
-use crate::{exec, perf, solver, Mode};
+use crate::{exec, perf, solver, Mode, SuperoptimizerOpts};
 use clap::arg_enum;
 use rand::distributions::{Bernoulli, Distribution};
 use rand::Rng;
@@ -7,8 +7,8 @@ use structopt::StructOpt;
 use self::transform::*;
 pub mod transform;
 pub mod whitelist;
-pub use self::candidate::*;
-mod candidate;
+pub use self::spec::*;
+mod spec;
 
 arg_enum! {
     #[derive(Clone, Debug)]
@@ -40,7 +40,7 @@ fn eval_candidate(
     stoke_options: &StokeOpts,
     mode: Mode,
     interpreter: &dyn exec::Interpreter,
-    candidate: &mut Candidate,
+    candidate: &mut Spec,
 ) -> u32 {
     let mut cost = if stoke_options.enforce_stack_check {
         match candidate.check_stack() {
@@ -67,13 +67,14 @@ fn eval_candidate(
 }
 
 pub fn search(
+    _options: &SuperoptimizerOpts,
     stoke_options: &StokeOpts,
     mode: Mode,
     rx: &std::sync::mpsc::Receiver<()>,
     z3_solver: &solver::Z3Solver,
     interpreter: &mut dyn exec::Interpreter,
-    candidate: &mut Candidate,
-) -> Option<Candidate> {
+    candidate: &mut Spec,
+) -> Option<Spec> {
     let mut rng = rand::thread_rng();
     let mut curr_cost = eval_candidate(stoke_options, mode, interpreter, candidate);
     let initial_cost = curr_cost;
