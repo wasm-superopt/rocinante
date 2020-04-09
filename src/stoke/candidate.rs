@@ -35,12 +35,6 @@ pub enum StackState {
     Invalid(i32),
 }
 
-pub enum AppendError {
-    NextIndexOutOfBounds,
-    StackUnderflow,
-    StackOverflow,
-}
-
 impl Candidate {
     pub fn new(
         spec_func_type: &FunctionType,
