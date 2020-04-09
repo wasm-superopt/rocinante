@@ -29,6 +29,9 @@ pub fn search(
 
     let mut rng = rand::thread_rng();
 
+    // TODO(taegyunkim): Support multiple return values.
+    let return_type_len = 1;
+
     let mut candidates: BinaryHeap<new_candidate::Candidate> = BinaryHeap::new();
     candidates.push(new_candidate::Candidate::new(candidate.instrs().len()));
 
@@ -39,7 +42,7 @@ pub fn search(
         }
 
         let program = candidates.pop().unwrap();
-        if program.num_values_on_stack() == program.return_type_len() {
+        if program.num_values_on_stack() == return_type_len {
             candidate.instrs_mut().clone_from_slice(program.instrs());
             if interpreter.eval_test_cases(candidate.get_binary()) == 0 {
                 match z3_solver.verify(&candidate.get_func_body()) {

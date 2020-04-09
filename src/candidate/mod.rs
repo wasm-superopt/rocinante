@@ -7,9 +7,6 @@ use std::result::Result;
 pub struct Candidate {
     instrs: Vec<Instruction>,
 
-    // Post Condition
-    return_type_len: i32,
-
     // Enumerative Search Specific Fields.
     next_index: usize,
     num_values_on_stack: i32,
@@ -27,8 +24,6 @@ impl Candidate {
     pub fn new(length: usize) -> Self {
         Self {
             instrs: vec![Instruction::Nop; length],
-            // TODO(taegyunkim): Support multiple return values.
-            return_type_len: 1,
             next_index: 0,
             num_values_on_stack: 0,
         }
@@ -46,8 +41,9 @@ impl Candidate {
         }
 
         let num_instrs_left = (self.instrs.len() - self.next_index - 1) as i32;
-        if self.return_type_len < self.num_values_on_stack - pop_cnts + push_cnts - num_instrs_left
-        {
+        // TODO(taegyunkim): Support multiple return values.
+        let return_type_len = 1;
+        if return_type_len < self.num_values_on_stack - pop_cnts + push_cnts - num_instrs_left {
             return Err(AppendError::StackOverflow);
         }
 
@@ -63,10 +59,6 @@ impl Candidate {
 
     pub fn instrs(&self) -> &[Instruction] {
         &self.instrs
-    }
-
-    pub fn return_type_len(&self) -> i32 {
-        self.return_type_len
     }
 
     pub fn next_index(&self) -> usize {
@@ -106,7 +98,6 @@ mod tests {
 
         assert_eq!(candidate.num_values_on_stack(), 0);
         assert_eq!(candidate.next_index(), 0);
-        assert_eq!(candidate.return_type_len(), 1);
     }
 
     #[test]
@@ -120,7 +111,6 @@ mod tests {
     #[test]
     fn try_append_stack_underflow_test() {
         let candidate: Candidate = Candidate::new(1);
-        assert_eq!(candidate.return_type_len(), 1);
         let result = candidate.try_append(Instruction::I32Add);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), AppendError::StackUnderflow);
