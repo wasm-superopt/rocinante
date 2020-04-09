@@ -15,9 +15,9 @@ pub fn search(
     whitelist.append(&mut stoke::whitelist::I32UNOP.to_vec());
     whitelist.append(&mut stoke::whitelist::I32RELOP.to_vec());
 
-    let num_locals = candidate.spec_func_type().params().len() + candidate.spec_local_types.len();
+    let num_local_indices = candidate.num_locals() + candidate.num_params();
 
-    for idx in 0..num_locals as u32 {
+    for idx in 0..num_local_indices as u32 {
         whitelist.push(Instruction::GetLocal(idx));
         whitelist.push(Instruction::SetLocal(idx));
         whitelist.push(Instruction::TeeLocal(idx));

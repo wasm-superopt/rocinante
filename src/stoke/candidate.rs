@@ -11,7 +11,7 @@ use rand::Rng;
 pub struct Candidate {
     // Fields representing the spec.
     spec_func_type: FunctionType,
-    pub spec_local_types: Vec<ValueType>,
+    spec_local_types: Vec<ValueType>,
     spec_func_body: FuncBody,
 
     /// This field contains WASM binary generated from above func_type, with function name
@@ -94,10 +94,10 @@ impl Candidate {
 
     pub fn get_equiv_local_idx<R: Rng + ?Sized>(&self, rng: &mut R, i: u32) -> u32 {
         let i = i as usize;
-        let typ: &ValueType = if i < self.spec_func_type.params().len() {
+        let typ: &ValueType = if i < self.num_params() {
             &self.spec_func_type.params()[i]
-        } else if i < self.spec_func_type.params().len() + self.spec_local_types.len() {
-            &self.spec_local_types[i - self.spec_func_type.params().len()]
+        } else if i < self.num_params() + self.num_locals() {
+            &self.spec_local_types[i - self.num_params()]
         } else {
             panic!("local index out of bounds: {}", i);
         };
@@ -111,7 +111,7 @@ impl Candidate {
 
         for (i, local_type) in self.spec_local_types.iter().enumerate() {
             if local_type == typ {
-                equiv_indices.push(i + self.spec_func_type.params().len());
+                equiv_indices.push(i + self.num_params());
             }
         }
 
@@ -130,10 +130,7 @@ impl Candidate {
     }
 
     pub fn sample_local_idx<R: Rng + ?Sized>(&self, rng: &mut R) -> u32 {
-        rng.gen_range(
-            0,
-            self.spec_func_type.params().len() + self.spec_local_types.len(),
-        ) as u32
+        rng.gen_range(0, self.num_params() + self.num_locals()) as u32
     }
 
     pub fn sample_i32<R: Rng + ?Sized>(&self, rng: &mut R) -> i32 {
@@ -191,6 +188,18 @@ impl Candidate {
 
     pub fn check_stack(&self) -> StackState {
         check_instrs(self.instrs())
+    }
+
+    /// Returns the number of locals. This doesn't include the number of parameters.
+    ///
+    /// See [num_params](Candidate.num_params).
+    pub fn num_locals(&self) -> usize {
+        self.spec_local_types.len()
+    }
+
+    /// Returns the number of parameterss.
+    pub fn num_params(&self) -> usize {
+        self.spec_func_type.params().len()
     }
 }
 
