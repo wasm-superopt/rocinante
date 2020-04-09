@@ -8,7 +8,7 @@ use rand::seq::SliceRandom;
 use rand::Rng;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Candidate {
+pub struct Spec {
     // Fields representing the spec.
     spec_func_type: FunctionType,
     spec_local_types: Vec<ValueType>,
@@ -23,7 +23,7 @@ pub struct Candidate {
     // Below are fields representing current candidate.
     instrs: Vec<Instruction>,
     /// The list of constants to use for synthesis.
-    pub constants: Vec<i32>,
+    constants: Vec<i32>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -32,7 +32,7 @@ pub enum StackState {
     Invalid(i32),
 }
 
-impl Candidate {
+impl Spec {
     pub fn new(
         spec_func_type: &FunctionType,
         spec_func_body: &FuncBody,
