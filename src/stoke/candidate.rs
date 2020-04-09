@@ -255,5 +255,14 @@ mod tests {
                 Instruction::SetLocal(0),  // 0
             ])
         );
+
+        assert_eq!(
+            StackState::Invalid(3),
+            check_instrs(&vec![
+                Instruction::GetLocal(0),
+                Instruction::GetLocal(0),
+                Instruction::GetLocal(0),
+            ])
+        );
     }
 }
