@@ -24,9 +24,6 @@ pub struct Candidate {
     instrs: Vec<Instruction>,
     /// The list of constants to use for synthesis.
     pub constants: Vec<i32>,
-
-    next_index: usize,
-    pub num_values_on_stack: i32,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -82,8 +79,6 @@ impl Candidate {
             // simply returns a value without any control flow.
             instrs: vec![Instruction::Nop; len - 1],
             constants,
-            next_index: 0,
-            num_values_on_stack: 0,
         }
     }
 
