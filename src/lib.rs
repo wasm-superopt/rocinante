@@ -156,7 +156,7 @@ impl Superoptimizer {
         let mut interpreter =
             exec::get_interpreter(options.interpreter_kind, &self.spec, func_name);
 
-        let mut candidate = wasm::Spec::new(func_type, func_body, options.constants.clone());
+        let mut spec = wasm::Spec::new(func_type, func_body);
 
         let cfg = z3::Config::new();
         let ctx = z3::Context::new(&cfg);
@@ -178,15 +178,11 @@ impl Superoptimizer {
                 &rx,
                 &z3_solver,
                 interpreter.as_mut(),
-                &mut candidate,
+                &mut spec,
             ),
-            Algorithm::Enumerative => enumerative::search(
-                options,
-                &rx,
-                &z3_solver,
-                interpreter.as_mut(),
-                &mut candidate,
-            ),
+            Algorithm::Enumerative => {
+                enumerative::search(options, &rx, &z3_solver, interpreter.as_mut(), &mut spec)
+            }
         }
     }
 }

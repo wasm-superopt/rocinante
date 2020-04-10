@@ -88,6 +88,10 @@ impl Whitelist {
         self.instrs.choose(rng).unwrap().clone()
     }
 
+    pub fn sample_i32_const<R: Rng + ?Sized>(&self, rng: &mut R) -> i32 {
+        *self._constants.choose(rng).unwrap()
+    }
+
     /// Checks whether the given instruction is whitelisted or not.
     pub fn is_instr_whitelisted(&self, instr: &Instruction) -> bool {
         // NOTE(taegyunkim)

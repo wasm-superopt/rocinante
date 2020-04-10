@@ -6,6 +6,7 @@ use parity_wasm::elements::{
 use rand::seq::SliceRandom;
 use rand::Rng;
 
+/// Struct to hold spec function metadata.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Spec {
     // Fields representing the spec.
@@ -21,8 +22,6 @@ pub struct Spec {
 
     // Below are fields representing current candidate.
     instrs: Vec<Instruction>,
-    /// The list of constants to use for synthesis.
-    constants: Vec<i32>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -32,11 +31,7 @@ pub enum StackState {
 }
 
 impl Spec {
-    pub fn new(
-        spec_func_type: &FunctionType,
-        spec_func_body: &FuncBody,
-        constants: Vec<i32>,
-    ) -> Self {
+    pub fn new(spec_func_type: &FunctionType, spec_func_body: &FuncBody) -> Self {
         let mut binary = parity_wasm_utils::build_module(
             "candidate",
             &spec_func_type,
@@ -75,7 +70,6 @@ impl Spec {
             // end, so subtract one for that. We assume that we want to synthesize a function that
             // simply returns a value without any control flow.
             instrs: vec![Instruction::Nop; len - 1],
-            constants,
         }
     }
 
@@ -123,10 +117,6 @@ impl Spec {
 
     pub fn sample_local_idx<R: Rng + ?Sized>(&self, rng: &mut R) -> u32 {
         rng.gen_range(0, self.num_params() + self.num_locals()) as u32
-    }
-
-    pub fn sample_i32<R: Rng + ?Sized>(&self, rng: &mut R) -> i32 {
-        *self.constants.choose(rng).unwrap()
     }
 
     pub fn instrs(&self) -> &[Instruction] {

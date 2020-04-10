@@ -117,7 +117,9 @@ impl Transform {
             Instruction::TeeLocal(i) => {
                 Instruction::SetLocal(candidate_func.get_equiv_local_idx(rng, *i))
             }
-            Instruction::I32Const(_) => Instruction::I32Const(candidate_func.sample_i32(rng)),
+            Instruction::I32Const(_) => {
+                Instruction::I32Const(instr_whitelist.sample_i32_const(rng))
+            }
             _ => {
                 if instr_whitelist.is_instr_whitelisted(&undo_instr) {
                     undo_instr.clone()
@@ -195,7 +197,6 @@ mod test {
                     Instruction::I32Const(1),
                 ]),
             ),
-            vec![-2, -1, 0, 1, 2],
         );
 
         let mut transformed = original.clone();
@@ -227,7 +228,6 @@ mod test {
                 vec![],
                 Instructions::new(vec![Instruction::Nop, Instruction::I32Const(1)]),
             ),
-            vec![-2, -1, 0, 1, 2],
         );
 
         let mut transformed = original.clone();
@@ -259,7 +259,6 @@ mod test {
                 vec![],
                 Instructions::new(vec![Instruction::Nop, Instruction::I32Const(1)]),
             ),
-            vec![-2, -1, 0, 1, 2],
         );
 
         let mut transformed = original.clone();
