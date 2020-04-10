@@ -1,7 +1,8 @@
 use crate::wasm::Candidate;
+use crate::wasm::Spec;
 use crate::wasm::Whitelist;
 use crate::SuperoptimizerOpts;
-use crate::{exec, solver, stoke::Spec};
+use crate::{exec, solver};
 use std::collections::BinaryHeap;
 
 pub fn search(
@@ -9,19 +10,15 @@ pub fn search(
     rx: &std::sync::mpsc::Receiver<()>,
     z3_solver: &solver::Z3Solver,
     interpreter: &mut dyn exec::Interpreter,
-    candidate: &mut Spec,
+    spec: &mut Spec,
 ) -> Option<Spec> {
-    let instr_whitelist = Whitelist::new(
-        candidate.num_params(),
-        candidate.num_locals(),
-        &options.constants,
-    );
+    let instr_whitelist = Whitelist::new(spec.num_params(), spec.num_locals(), &options.constants);
 
     // TODO(taegyunkim): Support multiple return values.
     let return_type_len = 1;
 
     let mut candidates: BinaryHeap<Candidate> = BinaryHeap::new();
-    candidates.push(Candidate::new(candidate.instrs().len()));
+    candidates.push(Candidate::new(spec.instrs().len()));
 
     while !candidates.is_empty() {
         if rx.try_recv().is_ok() {
@@ -31,11 +28,11 @@ pub fn search(
 
         let program = candidates.pop().unwrap();
         if program.num_values_on_stack() == return_type_len {
-            candidate.instrs_mut().clone_from_slice(program.instrs());
-            if interpreter.eval_test_cases(candidate.get_binary()) == 0 {
-                match z3_solver.verify(&candidate.get_func_body()) {
+            spec.instrs_mut().clone_from_slice(program.instrs());
+            if interpreter.eval_test_cases(spec.get_binary()) == 0 {
+                match z3_solver.verify(&spec.get_func_body()) {
                     solver::VerifyResult::Verified => {
-                        return Some(candidate.clone());
+                        return Some(spec.clone());
                     }
                     solver::VerifyResult::CounterExample(values) => {
                         interpreter.add_test_case(values);
