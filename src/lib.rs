@@ -97,7 +97,7 @@ impl Superoptimizer {
 
         // TODO(taegyunkim): Use num_cpus crate to appropriately set the number of workers.
         let num_workers = 1;
-        let mut candidates: Vec<wasm::Spec> = Vec::with_capacity(num_workers);
+        let mut candidates: Vec<wasm::Candidate> = Vec::with_capacity(num_workers);
 
         let export_section = module
             .export_section()
@@ -149,7 +149,7 @@ impl Superoptimizer {
         func_body: &FuncBody,
         options: &SuperoptimizerOpts,
         mode: Mode,
-    ) -> Option<wasm::Spec> {
+    ) -> Option<wasm::Candidate> {
         // NOTE(taegyunkim): Interpreter is not thread safe.
         let mut interpreter =
             exec::get_interpreter(options.interpreter_kind, &self.spec, func_name);
@@ -182,7 +182,7 @@ impl Superoptimizer {
     }
 }
 
-pub fn rank(candidates: &[wasm::Spec]) {
+pub fn rank(candidates: &[wasm::Candidate]) {
     println!("Found {} programs", candidates.len());
 
     let best = candidates
@@ -190,10 +190,7 @@ pub fn rank(candidates: &[wasm::Spec]) {
         .min_by(|a, b| perf(a.instrs()).cmp(&perf(b.instrs())))
         .unwrap();
 
-    println!(
-        "{}",
-        wasmprinter::print_bytes(best.to_module().to_bytes().unwrap()).unwrap()
-    );
+    println!("{:?}", best.instrs());
 }
 
 pub fn perf(instrs: &[Instruction]) -> u32 {

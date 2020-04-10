@@ -1,10 +1,6 @@
-use crate::{parity_wasm_utils, wasm};
+use crate::parity_wasm_utils;
 use parity_wasm::elements::serialize;
-use parity_wasm::elements::{
-    FuncBody, FunctionType, Instruction, Instructions, Local, Module, ValueType,
-};
-use rand::seq::SliceRandom;
-use rand::Rng;
+use parity_wasm::elements::{FuncBody, FunctionType, Instruction, Instructions, ValueType};
 
 /// Struct to hold spec function metadata.
 #[derive(Debug, Clone, PartialEq)]
@@ -19,15 +15,6 @@ pub struct Spec {
     /// multiple conversions to binary format which are costly.
     binary: Vec<u8>,
     binary_len: usize,
-
-    // Below are fields representing current candidate.
-    instrs: Vec<Instruction>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum StackState {
-    Valid,
-    Invalid(i32),
 }
 
 impl Spec {
@@ -66,202 +53,79 @@ impl Spec {
             spec_func_body: spec_func_body.clone(),
             binary,
             binary_len,
-            // NOTE(taegyunkim): The original spec instruction list has an END instruction at the
-            // end, so subtract one for that. We assume that we want to synthesize a function that
-            // simply returns a value without any control flow.
-            instrs: vec![Instruction::Nop; len - 1],
         }
-    }
-
-    pub fn get_rand_instr<R: Rng + ?Sized>(&self, rng: &mut R) -> (usize, Instruction) {
-        let indices = rand::seq::index::sample(rng, self.instrs.len(), 1);
-        (indices.index(0), self.instrs[indices.index(0)].clone())
-    }
-
-    pub fn get_equiv_local_idx<R: Rng + ?Sized>(&self, rng: &mut R, i: u32) -> u32 {
-        let i = i as usize;
-        let typ: &ValueType = if i < self.num_params() {
-            &self.spec_func_type.params()[i]
-        } else if i < self.num_params() + self.num_locals() {
-            &self.spec_local_types[i - self.num_params()]
-        } else {
-            panic!("local index out of bounds: {}", i);
-        };
-
-        let mut equiv_indices = Vec::new();
-        for (i, param_type) in self.spec_func_type.params().iter().enumerate() {
-            if param_type == typ {
-                equiv_indices.push(i);
-            }
-        }
-
-        for (i, local_type) in self.spec_local_types.iter().enumerate() {
-            if local_type == typ {
-                equiv_indices.push(i + self.num_params());
-            }
-        }
-
-        assert!(!equiv_indices.is_empty());
-
-        *equiv_indices.choose(rng).unwrap() as u32
-    }
-
-    pub fn strip_nops(&mut self) {
-        self.instrs = self
-            .instrs
-            .iter()
-            .cloned()
-            .filter(|instr| *instr != Instruction::Nop)
-            .collect::<Vec<Instruction>>();
-    }
-
-    pub fn sample_local_idx<R: Rng + ?Sized>(&self, rng: &mut R) -> u32 {
-        rng.gen_range(0, self.num_params() + self.num_locals()) as u32
-    }
-
-    pub fn instrs(&self) -> &[Instruction] {
-        &self.instrs
-    }
-
-    pub fn instrs_mut(&mut self) -> &mut Vec<Instruction> {
-        &mut self.instrs
     }
 
     pub fn get_spec_func_body(&self) -> &FuncBody {
         &self.spec_func_body
     }
 
-    pub fn get_func_body(&self) -> FuncBody {
-        // TODO(taegyunkim): For candidate programs that don't use locals, this can be removed.
-        let locals: Vec<Local> = self
-            .spec_local_types
-            .iter()
-            .map(|typ| Local::new(1, *typ))
-            .collect();
-
-        // NOTE(taegyunkim): As commented in the constructor we need to append an END instruction,
-        // to make this a valid function representation.
-        let mut instrs = self.instrs.clone();
-        instrs.push(Instruction::End);
-
-        FuncBody::new(locals, Instructions::new(instrs))
-    }
-
     pub fn spec_func_type(&self) -> &FunctionType {
         &self.spec_func_type
     }
 
-    pub fn to_module(&self) -> Module {
-        parity_wasm_utils::build_module("candidate", &self.spec_func_type, self.get_func_body())
+    // TODO(taegyunkim): Support multiple value return type.
+    pub fn return_type_len(&self) -> usize {
+        match self.spec_func_type.return_type() {
+            Some(_) => 1,
+            None => 0,
+        }
     }
 
-    pub fn get_binary(&mut self) -> &[u8] {
+    pub fn spec_param_types(&self) -> &[ValueType] {
+        &self.spec_func_type.params()
+    }
+
+    pub fn spec_local_types(&self) -> &[ValueType] {
+        &self.spec_local_types
+    }
+
+    /// Returns the number of parameterss. This doesn't include the number of locals.
+    ///
+    /// See [num_locals](Spec.num_locals)
+    pub fn num_params(&self) -> usize {
+        self.spec_func_type.params().len()
+    }
+
+    /// Returns the number of locals. This doesn't include the number of parameters.
+    ///
+    /// See [num_params](Spec.num_params).
+    pub fn num_locals(&self) -> usize {
+        self.spec_local_types.len()
+    }
+
+    /// Returns the list of types for all parameters and local variables. The length of returned
+    /// slice equals to `[num_params](Spec.num_params) + [num_locals](Spec.num_locals)`
+    pub fn get_param_and_local_types(&self) -> &[ValueType] {
+        &self.spec_local_types
+    }
+
+    /// Returns the number of instructions, excluding END instruction at the end.
+    ///
+    /// We assume that the spec function has only one END instruction at the end of the function,
+    /// and doesn't contain any blocks, constrol flows within it, which would also use END.
+    pub fn num_instrs(&self) -> usize {
+        self.spec_func_body.code().elements().len() - 1
+    }
+
+    pub fn get_binary_with_instrs(&mut self, instrs: &[Instruction]) -> &[u8] {
+        // NOTE(taegyunkim): As commented in the constructor we need to append an END instruction,
+        // to make this a valid function representation.
+        let mut instrs = instrs.to_vec();
+        instrs.push(Instruction::End);
+
+        let func_body = FuncBody::new(
+            self.spec_func_body.locals().to_vec(),
+            Instructions::new(instrs),
+        );
+
         // TODO(taegyunkim): Avoid conversion to FuncBody and convert instruction list to binary.
-        let func_binary = serialize::<FuncBody>(self.get_func_body()).unwrap();
+        let func_binary = serialize::<FuncBody>(func_body).unwrap();
 
         self.binary.truncate(self.binary_len);
         self.binary.extend(&[func_binary.len() as u8 + 1, 1]);
         self.binary.extend(func_binary);
 
-        // TODO(taegyunkim): Add a test.
-        assert_eq!(self.binary, self.to_module().to_bytes().unwrap());
         &self.binary
-    }
-
-    pub fn check_stack(&self, instr_whitelist: &wasm::Whitelist) -> StackState {
-        check_instrs(instr_whitelist, self.instrs())
-    }
-
-    /// Returns the number of locals. This doesn't include the number of parameters.
-    ///
-    /// See [num_params](Candidate.num_params).
-    pub fn num_locals(&self) -> usize {
-        self.spec_local_types.len()
-    }
-
-    /// Returns the number of parameterss.
-    pub fn num_params(&self) -> usize {
-        self.spec_func_type.params().len()
-    }
-}
-
-pub fn check_instrs(instr_whitelist: &wasm::Whitelist, instrs: &[Instruction]) -> StackState {
-    let mut cnt: i32 = 0;
-    let mut valid = true;
-    for instr in instrs {
-        let (pop, push) = instr_whitelist.push_pop_cnts(instr);
-        cnt -= pop;
-        if cnt < 0 {
-            valid = false;
-        }
-        cnt += push;
-    }
-    if cnt == 1 && valid {
-        StackState::Valid
-    } else {
-        StackState::Invalid(cnt)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn check_instrs_test() {
-        let instr_whitelist = wasm::Whitelist::new(1, 0, &[-1, -2, 0, 1, 2]);
-
-        assert_eq!(
-            StackState::Invalid(-2),
-            check_instrs(
-                &instr_whitelist,
-                &vec![
-                    Instruction::I32Const(-1),
-                    Instruction::TeeLocal(0),
-                    Instruction::I32GeS,
-                    Instruction::I32ShrU,
-                    Instruction::I32And,
-                ]
-            )
-        );
-
-        assert_eq!(
-            StackState::Invalid(-1),
-            check_instrs(
-                &instr_whitelist,
-                &vec![
-                    Instruction::GetLocal(0),
-                    Instruction::I32Ctz,
-                    Instruction::TeeLocal(0),
-                    Instruction::I32LtS,
-                    Instruction::I32LeS,
-                ]
-            )
-        );
-
-        assert_eq!(
-            StackState::Invalid(0),
-            check_instrs(
-                &instr_whitelist,
-                &vec![
-                    Instruction::GetLocal(0),  // 1
-                    Instruction::I32Const(-2), // 2
-                    Instruction::I32GtS,       // 1
-                    Instruction::TeeLocal(0),  // 1
-                    Instruction::SetLocal(0),  // 0
-                ]
-            )
-        );
-
-        assert_eq!(
-            StackState::Invalid(3),
-            check_instrs(
-                &instr_whitelist,
-                &vec![
-                    Instruction::GetLocal(0),
-                    Instruction::GetLocal(0),
-                    Instruction::GetLocal(0),
-                ]
-            )
-        );
     }
 }

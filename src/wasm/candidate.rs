@@ -1,5 +1,6 @@
 use crate::wasm::Whitelist;
 use parity_wasm::elements::Instruction;
+use rand::Rng;
 use std::cmp::Ordering;
 use std::result::Result;
 
@@ -19,11 +20,26 @@ pub enum AppendError {
     StackOverflow,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum StackState {
+    Valid,
+    Invalid(i32),
+}
+
 impl Candidate {
     /// New WASM program with given length.
-    pub fn new(length: usize) -> Self {
+    pub fn new(max_length: usize) -> Self {
         Self {
-            instrs: vec![Instruction::Nop; length],
+            instrs: vec![Instruction::Nop; max_length],
+            next_index: 0,
+            num_values_on_stack: 0,
+        }
+    }
+
+    pub fn from_instrs(instrs: Vec<Instruction>) -> Self {
+        // TODO(taegyunkim): Properly update num_values_on_stack.
+        Self {
+            instrs,
             next_index: 0,
             num_values_on_stack: 0,
         }
@@ -65,12 +81,49 @@ impl Candidate {
         &self.instrs
     }
 
+    pub fn instrs_mut(&mut self) -> &mut Vec<Instruction> {
+        &mut self.instrs
+    }
+
     pub fn next_index(&self) -> usize {
         self.next_index
     }
 
     pub fn num_values_on_stack(&self) -> i32 {
         self.num_values_on_stack
+    }
+
+    /// Removes Nop instructions.
+    pub fn strip_nops(&mut self) {
+        self.instrs = self
+            .instrs
+            .iter()
+            .cloned()
+            .filter(|instr| *instr != Instruction::Nop)
+            .collect();
+    }
+
+    pub fn get_rand_instr<R: Rng + ?Sized>(&self, rng: &mut R) -> (usize, Instruction) {
+        let indices = rand::seq::index::sample(rng, self.instrs.len(), 1);
+        (indices.index(0), self.instrs[indices.index(0)].clone())
+    }
+
+    pub fn is_stack_valid(&self, instr_whitelist: &Whitelist) -> StackState {
+        let mut cnt: i32 = 0;
+        let mut valid = true;
+        for instr in &self.instrs {
+            let (pop, push) = instr_whitelist.push_pop_cnts(instr);
+            cnt -= pop;
+            if cnt < 0 {
+                valid = false;
+            }
+            cnt += push;
+        }
+        if cnt == 1 && valid {
+            StackState::Valid
+        } else {
+            StackState::Invalid(cnt)
+        }
     }
 }
 

@@ -1,8 +1,7 @@
-use crate::wasm::{Spec, StackState};
+use crate::wasm::{Candidate, Spec, StackState};
 use crate::{exec, perf, solver, wasm, Mode, SuperoptimizerOpts};
 use clap::arg_enum;
 use rand::distributions::{Bernoulli, Distribution};
-use rand::Rng;
 use structopt::StructOpt;
 
 use self::transform::*;
@@ -40,11 +39,12 @@ fn eval_candidate(
     instr_whitelist: &wasm::Whitelist,
     interpreter: &dyn exec::Interpreter,
     spec: &mut Spec,
+    candidate: &Candidate,
 ) -> u32 {
     let mut cost = if stoke_options.enforce_stack_check {
-        match spec.check_stack(instr_whitelist) {
+        match candidate.is_stack_valid(instr_whitelist) {
             StackState::Valid => {
-                let binary = spec.get_binary();
+                let binary = spec.get_binary_with_instrs(candidate.instrs());
                 interpreter.eval_test_cases(&binary)
             }
             StackState::Invalid(cnt) => {
@@ -54,12 +54,12 @@ fn eval_candidate(
             }
         }
     } else {
-        let binary = spec.get_binary();
+        let binary = spec.get_binary_with_instrs(candidate.instrs());
         interpreter.eval_test_cases(&binary)
     };
 
     if mode == Mode::Optimization {
-        cost += perf(spec.get_func_body().code().elements());
+        cost += perf(candidate.instrs());
     }
 
     cost
@@ -73,22 +73,31 @@ pub fn search(
     z3_solver: &solver::Z3Solver,
     interpreter: &mut dyn exec::Interpreter,
     spec: &mut Spec,
-) -> Option<Spec> {
+) -> Option<Candidate> {
     let mut rng = rand::thread_rng();
 
     let instr_whitelist =
         wasm::Whitelist::new(spec.num_params(), spec.num_locals(), &options.constants);
 
-    let mut curr_cost = eval_candidate(stoke_options, mode, &instr_whitelist, interpreter, spec);
+    let mut candidate = Candidate::new(spec.num_instrs());
+
+    let mut curr_cost = eval_candidate(
+        stoke_options,
+        mode,
+        &instr_whitelist,
+        interpreter,
+        spec,
+        &candidate,
+    );
     let initial_cost = curr_cost;
 
     loop {
         if (mode == Mode::Optimization && curr_cost < initial_cost)
             || (mode == Mode::Synthesis && curr_cost == 0)
         {
-            match z3_solver.verify(&spec.get_func_body()) {
+            match z3_solver.verify(&candidate.instrs()) {
                 solver::VerifyResult::Verified => {
-                    return Some(spec.clone());
+                    return Some(candidate);
                 }
                 solver::VerifyResult::CounterExample(values) => {
                     interpreter.add_test_case(values);
@@ -102,9 +111,16 @@ pub fn search(
             break;
         }
 
-        let transform = rng.gen::<Transform>();
-        let transform_info = transform.operate(&mut rng, &instr_whitelist, spec);
-        let new_cost = eval_candidate(stoke_options, mode, &instr_whitelist, interpreter, spec);
+        let transform = Transform::new(std::rc::Rc::new(spec.get_param_and_local_types().to_vec()));
+        let transform_info = transform.operate(&mut rng, &instr_whitelist, &mut candidate);
+        let new_cost = eval_candidate(
+            stoke_options,
+            mode,
+            &instr_whitelist,
+            interpreter,
+            spec,
+            &candidate,
+        );
 
         #[cfg(debug_assertions)]
         println!("curr_cost: {}, new_cost: {}", curr_cost, new_cost);
@@ -129,7 +145,7 @@ pub fn search(
                     if !accept {
                         #[cfg(debug_assertions)]
                         println!("undoing...");
-                        transform.undo(&transform_info, spec);
+                        transform.undo(&transform_info, &mut candidate);
                     } else {
                         #[cfg(debug_assertions)]
                         println!("accepted...");
