@@ -72,11 +72,11 @@ impl Spec {
         }
     }
 
-    pub fn spec_param_types(&self) -> &[ValueType] {
+    pub fn param_types(&self) -> &[ValueType] {
         &self.spec_func_type.params()
     }
 
-    pub fn spec_local_types(&self) -> &[ValueType] {
+    pub fn local_types(&self) -> &[ValueType] {
         &self.spec_local_types
     }
 
@@ -92,12 +92,6 @@ impl Spec {
     /// See [num_params](Spec.num_params).
     pub fn num_locals(&self) -> usize {
         self.spec_local_types.len()
-    }
-
-    /// Returns the list of types for all parameters and local variables. The length of returned
-    /// slice equals to `[num_params](Spec.num_params) + [num_locals](Spec.num_locals)`
-    pub fn get_param_and_local_types(&self) -> &[ValueType] {
-        &self.spec_local_types
     }
 
     /// Returns the number of instructions, excluding END instruction at the end.
