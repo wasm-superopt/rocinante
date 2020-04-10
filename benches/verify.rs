@@ -39,7 +39,7 @@ fn bench_verify(c: &mut Criterion) {
     let solver = Z3Solver::new(&ctx, spec_func_type, spec_func_body);
     // [14.525 ms 14.865 ms 15.225 ms] on Taegyun's macbook pro
     c.bench_function("z3solver", |b| {
-        b.iter(|| solver.verify(candidate_func_body))
+        b.iter(|| solver.verify(candidate_func_body.code().elements()))
     });
 }
 

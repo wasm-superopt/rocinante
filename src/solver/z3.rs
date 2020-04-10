@@ -44,6 +44,7 @@ pub struct Converter<'ctx> {
     ctx: &'ctx Context,
     z3_params: Vec<ast::Dynamic<'ctx>>,
     func_type: FunctionType,
+    local_types: Vec<ValueType>,
 }
 
 fn ctz<'a>(ctx: &'a Context, input: &ast::BV<'a>) -> ast::BV<'a> {
@@ -109,7 +110,7 @@ fn popcnt<'a>(ctx: &'a Context, input: &ast::BV<'a>) -> ast::BV<'a> {
 }
 
 impl<'ctx> Converter<'ctx> {
-    pub fn new(ctx: &'ctx Context, func_type: &FunctionType) -> Self {
+    pub fn new(ctx: &'ctx Context, func_type: &FunctionType, locals: &[Local]) -> Self {
         let mut z3_params: Vec<ast::Dynamic<'ctx>> = Vec::with_capacity(func_type.params().len());
 
         for param in func_type.params() {
@@ -122,10 +123,22 @@ impl<'ctx> Converter<'ctx> {
             }
         }
 
+        let mut local_types = Vec::new();
+
+        for local in locals {
+            let cnt = local.count();
+            let local_type = local.value_type();
+
+            for _ in 0..cnt {
+                local_types.push(local_type);
+            }
+        }
+
         Self {
             ctx,
             z3_params,
             func_type: func_type.clone(),
+            local_types,
         }
     }
 
@@ -133,29 +146,24 @@ impl<'ctx> Converter<'ctx> {
         self.z3_params.iter().collect::<Vec<&ast::Dynamic<'ctx>>>()
     }
 
-    fn init_locals(&self, local_types: &[Local]) -> Vec<ast::Dynamic<'ctx>> {
+    fn init_locals(&self) -> Vec<ast::Dynamic<'ctx>> {
         let mut locals: Vec<ast::Dynamic<'ctx>> = Vec::new();
 
         for param in self.z3_params.iter() {
             locals.push(param.clone());
         }
 
-        locals.reserve(local_types.len());
+        locals.reserve(self.local_types.len());
 
-        for local in local_types {
-            let cnt = local.count();
-            let local_type = local.value_type();
-
-            for _ in 0..cnt {
-                match local_type {
-                    // Initial value of any local is 0.
-                    ValueType::I32 => locals.push(ast::BV::from_u64(&self.ctx, 0, 32).into()),
-                    ValueType::I64 => locals.push(ast::BV::from_u64(&self.ctx, 0, 64).into()),
-                    // NOTE(taegyunkim): z3.rs doesn't provide wrappers for Z3
-                    // floats. We first need to implement those in z3.rs
-                    _ => {
-                        panic!("float not supported.");
-                    }
+        for local_type in &self.local_types {
+            match local_type {
+                // Initial value of any local is 0.
+                ValueType::I32 => locals.push(ast::BV::from_u64(&self.ctx, 0, 32).into()),
+                ValueType::I64 => locals.push(ast::BV::from_u64(&self.ctx, 0, 64).into()),
+                // NOTE(taegyunkim): z3.rs doesn't provide wrappers for Z3
+                // floats. We first need to implement those in z3.rs
+                _ => {
+                    panic!("float not supported.");
                 }
             }
         }
@@ -164,10 +172,10 @@ impl<'ctx> Converter<'ctx> {
     }
 
     // TODO(taegyunkim): Add test for each case.
-    pub fn convert_func(&self, func: &FuncBody) -> ast::Dynamic<'ctx> {
-        let mut locals: Vec<ast::Dynamic<'ctx>> = self.init_locals(func.locals());
+    pub fn convert(&self, instrs: &[Instruction]) -> ast::Dynamic<'ctx> {
+        let mut locals: Vec<ast::Dynamic<'ctx>> = self.init_locals();
         let mut stack: ValueStack<'ctx> = ValueStack::new();
-        for instr in func.code().elements() {
+        for instr in instrs {
             match instr {
                 // I32 binops
                 Instruction::I32Add => {
@@ -414,8 +422,8 @@ pub struct Z3Solver<'ctx> {
 
 impl<'ctx> Z3Solver<'ctx> {
     pub fn new(ctx: &'ctx Context, func_type: &FunctionType, spec: &FuncBody) -> Self {
-        let converter = Converter::new(ctx, func_type);
-        let spec_f = converter.convert_func(spec);
+        let converter = Converter::new(ctx, func_type, spec.locals());
+        let spec_f = converter.convert(spec.code().elements());
         Self {
             ctx,
             converter,
@@ -423,8 +431,8 @@ impl<'ctx> Z3Solver<'ctx> {
         }
     }
 
-    pub fn verify(&self, candidate: &FuncBody) -> VerifyResult {
-        let candidate_f = self.converter.convert_func(candidate);
+    pub fn verify(&self, instrs: &[Instruction]) -> VerifyResult {
+        let candidate_f = self.converter.convert(instrs);
         let solver = Solver::new(&self.ctx);
 
         let exists: ast::Bool = ast::exists_const(
@@ -540,7 +548,10 @@ mod tests {
         let ctx = z3::Context::new(&cfg);
 
         let solver = Z3Solver::new(&ctx, spec_func_type, spec_func_body);
-        assert_eq!(solver.verify(candidate_func_body), VerifyResult::Verified);
+        assert_eq!(
+            solver.verify(candidate_func_body.code().elements()),
+            VerifyResult::Verified
+        );
     }
 
     // Verifies that x + x == x << 1.
@@ -573,7 +584,10 @@ mod tests {
         let ctx = z3::Context::new(&cfg);
 
         let solver = Z3Solver::new(&ctx, spec_func_type, spec_func_body);
-        assert_eq!(solver.verify(candidate_func_body), VerifyResult::Verified);
+        assert_eq!(
+            solver.verify(candidate_func_body.code().elements()),
+            VerifyResult::Verified
+        );
     }
 
     // Checks that x + x != x * 3 and generates a counterexample. Then, using
@@ -614,7 +628,7 @@ mod tests {
         let ctx = z3::Context::new(&cfg);
 
         let solver = Z3Solver::new(&ctx, spec_func_type, spec_func_body);
-        let result = solver.verify(candidate_func_body);
+        let result = solver.verify(candidate_func_body.code().elements());
         assert_matches!(result, VerifyResult::CounterExample(_));
         if let VerifyResult::CounterExample(cex_vec) = result {
             assert_eq!(cex_vec.len(), 1);
