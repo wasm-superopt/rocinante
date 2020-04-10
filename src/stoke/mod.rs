@@ -1,4 +1,4 @@
-use crate::{exec, perf, solver, Mode, SuperoptimizerOpts};
+use crate::{exec, perf, solver, wasm, Mode, SuperoptimizerOpts};
 use clap::arg_enum;
 use rand::distributions::{Bernoulli, Distribution};
 use rand::Rng;
@@ -6,7 +6,6 @@ use structopt::StructOpt;
 
 use self::transform::*;
 pub mod transform;
-pub mod whitelist;
 pub use self::spec::*;
 mod spec;
 
@@ -39,11 +38,12 @@ pub struct StokeOpts {
 fn eval_candidate(
     stoke_options: &StokeOpts,
     mode: Mode,
+    instr_whitelist: &wasm::Whitelist,
     interpreter: &dyn exec::Interpreter,
     candidate: &mut Spec,
 ) -> u32 {
     let mut cost = if stoke_options.enforce_stack_check {
-        match candidate.check_stack() {
+        match candidate.check_stack(instr_whitelist) {
             StackState::Valid => {
                 let binary = candidate.get_binary();
                 interpreter.eval_test_cases(&binary)
@@ -67,7 +67,7 @@ fn eval_candidate(
 }
 
 pub fn search(
-    _options: &SuperoptimizerOpts,
+    options: &SuperoptimizerOpts,
     stoke_options: &StokeOpts,
     mode: Mode,
     rx: &std::sync::mpsc::Receiver<()>,
@@ -76,7 +76,20 @@ pub fn search(
     candidate: &mut Spec,
 ) -> Option<Spec> {
     let mut rng = rand::thread_rng();
-    let mut curr_cost = eval_candidate(stoke_options, mode, interpreter, candidate);
+
+    let instr_whitelist = wasm::Whitelist::new(
+        candidate.num_params(),
+        candidate.num_locals(),
+        &options.constants,
+    );
+
+    let mut curr_cost = eval_candidate(
+        stoke_options,
+        mode,
+        &instr_whitelist,
+        interpreter,
+        candidate,
+    );
     let initial_cost = curr_cost;
 
     loop {
@@ -100,8 +113,14 @@ pub fn search(
         }
 
         let transform = rng.gen::<Transform>();
-        let transform_info = transform.operate(&mut rng, candidate);
-        let new_cost = eval_candidate(stoke_options, mode, interpreter, candidate);
+        let transform_info = transform.operate(&mut rng, &instr_whitelist, candidate);
+        let new_cost = eval_candidate(
+            stoke_options,
+            mode,
+            &instr_whitelist,
+            interpreter,
+            candidate,
+        );
 
         #[cfg(debug_assertions)]
         println!("curr_cost: {}, new_cost: {}", curr_cost, new_cost);

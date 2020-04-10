@@ -1,5 +1,4 @@
-use crate::parity_wasm_utils;
-use crate::stoke::whitelist;
+use crate::{parity_wasm_utils, wasm};
 use parity_wasm::elements::serialize;
 use parity_wasm::elements::{
     FuncBody, FunctionType, Instruction, Instructions, Local, Module, ValueType,
@@ -38,8 +37,6 @@ impl Spec {
         spec_func_body: &FuncBody,
         constants: Vec<i32>,
     ) -> Self {
-        whitelist::check_instrs(spec_func_body.code().elements());
-
         let mut binary = parity_wasm_utils::build_module(
             "candidate",
             &spec_func_type,
@@ -181,8 +178,8 @@ impl Spec {
         &self.binary
     }
 
-    pub fn check_stack(&self) -> StackState {
-        check_instrs(self.instrs())
+    pub fn check_stack(&self, instr_whitelist: &wasm::Whitelist) -> StackState {
+        check_instrs(instr_whitelist, self.instrs())
     }
 
     /// Returns the number of locals. This doesn't include the number of parameters.
@@ -198,11 +195,11 @@ impl Spec {
     }
 }
 
-pub fn check_instrs(instrs: &[Instruction]) -> StackState {
+pub fn check_instrs(instr_whitelist: &wasm::Whitelist, instrs: &[Instruction]) -> StackState {
     let mut cnt: i32 = 0;
     let mut valid = true;
     for instr in instrs {
-        let (pop, push) = whitelist::stack_cnt(instr);
+        let (pop, push) = instr_whitelist.push_pop_cnts(instr);
         cnt -= pop;
         if cnt < 0 {
             valid = false;
@@ -221,46 +218,60 @@ mod tests {
     use super::*;
     #[test]
     fn check_instrs_test() {
+        let instr_whitelist = wasm::Whitelist::new(1, 0, &[-1, -2, 0, 1, 2]);
+
         assert_eq!(
             StackState::Invalid(-2),
-            check_instrs(&vec![
-                Instruction::I32Const(-1),
-                Instruction::TeeLocal(0),
-                Instruction::I32GeS,
-                Instruction::I32ShrU,
-                Instruction::I32And,
-            ])
+            check_instrs(
+                &instr_whitelist,
+                &vec![
+                    Instruction::I32Const(-1),
+                    Instruction::TeeLocal(0),
+                    Instruction::I32GeS,
+                    Instruction::I32ShrU,
+                    Instruction::I32And,
+                ]
+            )
         );
 
         assert_eq!(
             StackState::Invalid(-1),
-            check_instrs(&vec![
-                Instruction::GetLocal(0),
-                Instruction::I32Ctz,
-                Instruction::TeeLocal(0),
-                Instruction::I32LtS,
-                Instruction::I32LeS,
-            ])
+            check_instrs(
+                &instr_whitelist,
+                &vec![
+                    Instruction::GetLocal(0),
+                    Instruction::I32Ctz,
+                    Instruction::TeeLocal(0),
+                    Instruction::I32LtS,
+                    Instruction::I32LeS,
+                ]
+            )
         );
 
         assert_eq!(
             StackState::Invalid(0),
-            check_instrs(&vec![
-                Instruction::GetLocal(0),  // 1
-                Instruction::I32Const(-2), // 2
-                Instruction::I32GtS,       // 1
-                Instruction::TeeLocal(0),  // 1
-                Instruction::SetLocal(0),  // 0
-            ])
+            check_instrs(
+                &instr_whitelist,
+                &vec![
+                    Instruction::GetLocal(0),  // 1
+                    Instruction::I32Const(-2), // 2
+                    Instruction::I32GtS,       // 1
+                    Instruction::TeeLocal(0),  // 1
+                    Instruction::SetLocal(0),  // 0
+                ]
+            )
         );
 
         assert_eq!(
             StackState::Invalid(3),
-            check_instrs(&vec![
-                Instruction::GetLocal(0),
-                Instruction::GetLocal(0),
-                Instruction::GetLocal(0),
-            ])
+            check_instrs(
+                &instr_whitelist,
+                &vec![
+                    Instruction::GetLocal(0),
+                    Instruction::GetLocal(0),
+                    Instruction::GetLocal(0),
+                ]
+            )
         );
     }
 }
