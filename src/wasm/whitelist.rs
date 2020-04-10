@@ -75,6 +75,8 @@ impl Whitelist {
             instrs.push(Instruction::I32Const(*c));
         }
 
+        instrs.shuffle(&mut rand::thread_rng());
+
         Self {
             _num_params: num_params,
             _num_locals: num_locals,
