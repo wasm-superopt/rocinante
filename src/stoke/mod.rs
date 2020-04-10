@@ -81,6 +81,8 @@ pub fn search(
 
     let mut candidate = Candidate::new(spec.num_instrs());
 
+    let transform = Transform::new(spec.param_types().to_vec(), spec.local_types().to_vec());
+
     let mut curr_cost = eval_candidate(
         stoke_options,
         mode,
@@ -111,7 +113,6 @@ pub fn search(
             break;
         }
 
-        let transform = Transform::new(std::rc::Rc::new(spec.get_param_and_local_types().to_vec()));
         let transform_info = transform.operate(&mut rng, &instr_whitelist, &mut candidate);
         let new_cost = eval_candidate(
             stoke_options,

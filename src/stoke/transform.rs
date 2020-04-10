@@ -3,7 +3,6 @@ use parity_wasm::elements::{Instruction, ValueType};
 use rand::distributions::{Distribution, Standard};
 use rand::seq::SliceRandom;
 use rand::Rng;
-use std::rc::Rc;
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum TransformKind {
@@ -33,13 +32,15 @@ pub struct TransformInfo {
 }
 
 pub struct Transform {
-    param_and_local_types: Rc<Vec<ValueType>>,
+    spec_param_types: Vec<ValueType>,
+    spec_local_types: Vec<ValueType>,
 }
 
 impl Transform {
-    pub fn new(param_and_local_types: Rc<Vec<ValueType>>) -> Self {
+    pub fn new(spec_param_types: Vec<ValueType>, spec_local_types: Vec<ValueType>) -> Self {
         Self {
-            param_and_local_types: param_and_local_types.clone(),
+            spec_param_types,
+            spec_local_types,
         }
     }
 
@@ -106,14 +107,28 @@ impl Transform {
 
     fn get_equiv_local_idx<R: Rng + ?Sized>(&self, rng: &mut R, idx: u32) -> u32 {
         let i = idx as usize;
+        let typ: &ValueType = if i < self.spec_param_types.len() {
+            &self.spec_param_types[i]
+        } else if i < self.spec_param_types.len() + self.spec_local_types.len() {
+            &self.spec_local_types[i - self.spec_param_types.len()]
+        } else {
+            panic!("local index out of bounds: {}", i);
+        };
 
-        let typ_i: &ValueType = &self.param_and_local_types[i];
         let mut equiv_indices = Vec::new();
-        for (j, typ_j) in self.param_and_local_types.iter().enumerate() {
-            if typ_i == typ_j {
-                equiv_indices.push(j);
+        for (i, param_type) in self.spec_param_types.iter().enumerate() {
+            if param_type == typ {
+                equiv_indices.push(i);
             }
         }
+
+        for (i, local_type) in self.spec_local_types.iter().enumerate() {
+            if local_type == typ {
+                equiv_indices.push(i + self.spec_param_types.len());
+            }
+        }
+
+        assert!(!equiv_indices.is_empty());
 
         *equiv_indices.choose(rng).unwrap() as u32
     }
@@ -194,7 +209,7 @@ mod test {
     use parity_wasm::elements::{Instruction, ValueType};
     #[test]
     fn opcode_transform_test() {
-        let transform = Transform::new(Rc::new(vec![ValueType::I32]));
+        let transform = Transform::new(vec![ValueType::I32], vec![]);
         let instr_whitelist = Whitelist::new(1, 0, &[1]);
 
         let original = Candidate::from_instrs(vec![Instruction::Nop, Instruction::I32Const(1)]);
@@ -221,7 +236,7 @@ mod test {
 
     #[test]
     fn operand_transform_test() {
-        let transform = Transform::new(Rc::new(vec![ValueType::I32]));
+        let transform = Transform::new(vec![ValueType::I32], vec![]);
         let instr_whitelist = Whitelist::new(1, 0, &[1]);
 
         let original =
@@ -249,7 +264,7 @@ mod test {
 
     #[test]
     fn swap_transform_test() {
-        let transform = Transform::new(Rc::new(vec![ValueType::I32]));
+        let transform = Transform::new(vec![ValueType::I32], vec![]);
         let instr_whitelist = Whitelist::new(1, 0, &[1]);
 
         let original =
