@@ -1,5 +1,5 @@
-use crate::stoke::whitelist;
 use crate::stoke::Spec;
+use crate::wasm::Whitelist;
 use parity_wasm::elements::Instruction;
 use rand::distributions::{Distribution, Standard};
 use rand::Rng;
@@ -53,13 +53,14 @@ impl Transform {
     pub fn operate<R: Rng + ?Sized>(
         &self,
         rng: &mut R,
+        instr_whitelist: &Whitelist,
         candidate_func: &mut Spec,
     ) -> TransformInfo {
         match self.kind() {
-            TransformKind::Opcode => self.opcode(rng, candidate_func),
-            TransformKind::Operand => self.operand(rng, candidate_func),
+            TransformKind::Opcode => self.opcode(rng, instr_whitelist, candidate_func),
+            TransformKind::Operand => self.operand(rng, instr_whitelist, candidate_func),
             TransformKind::Swap => self.swap(rng, candidate_func),
-            TransformKind::Instruction => self.instruction(rng, candidate_func),
+            TransformKind::Instruction => self.instruction(rng, instr_whitelist, candidate_func),
         }
     }
 
@@ -78,9 +79,14 @@ impl Transform {
         }
     }
 
-    fn opcode<R: Rng + ?Sized>(&self, rng: &mut R, candidate_func: &mut Spec) -> TransformInfo {
+    fn opcode<R: Rng + ?Sized>(
+        &self,
+        rng: &mut R,
+        instr_whitelist: &Whitelist,
+        candidate_func: &mut Spec,
+    ) -> TransformInfo {
         let (idx, undo_instr) = candidate_func.get_rand_instr(rng);
-        let new_instr = whitelist::get_equiv_instr(rng, &undo_instr);
+        let new_instr = instr_whitelist.get_equiv_instr(rng, &undo_instr);
 
         let instrs = candidate_func.instrs_mut();
         instrs[idx] = new_instr.clone();
@@ -93,7 +99,12 @@ impl Transform {
         }
     }
 
-    fn operand<R: Rng + ?Sized>(&self, rng: &mut R, candidate_func: &mut Spec) -> TransformInfo {
+    fn operand<R: Rng + ?Sized>(
+        &self,
+        rng: &mut R,
+        instr_whitelist: &Whitelist,
+        candidate_func: &mut Spec,
+    ) -> TransformInfo {
         let (instr_idx, undo_instr) = candidate_func.get_rand_instr(rng);
 
         let new_instr: Instruction = match &undo_instr {
@@ -108,7 +119,7 @@ impl Transform {
             }
             Instruction::I32Const(_) => Instruction::I32Const(candidate_func.sample_i32(rng)),
             _ => {
-                if whitelist::check(&undo_instr) {
+                if instr_whitelist.is_instr_whitelisted(&undo_instr) {
                     undo_instr.clone()
                 } else {
                     panic!("Instruction not implemented.")
@@ -144,10 +155,11 @@ impl Transform {
     fn instruction<R: Rng + ?Sized>(
         &self,
         rng: &mut R,
+        instr_whitelist: &Whitelist,
         candidate_func: &mut Spec,
     ) -> TransformInfo {
         let (instr_idx, undo_instr) = candidate_func.get_rand_instr(rng);
-        let new_instr: Instruction = whitelist::sample(rng, candidate_func);
+        let new_instr: Instruction = instr_whitelist.sample(rng);
 
         let instrs = candidate_func.instrs_mut();
         instrs[instr_idx] = new_instr.clone();
@@ -169,6 +181,8 @@ mod test {
     #[test]
     fn opcode_transform_test() {
         let transform = Transform::new(TransformKind::Opcode);
+
+        let instr_whitelist = Whitelist::new(1, 0, &[1]);
         assert_eq!(transform.kind(), TransformKind::Opcode);
 
         let original = Spec::new(
@@ -185,7 +199,8 @@ mod test {
         );
 
         let mut transformed = original.clone();
-        let transform_info = transform.operate(&mut rand::thread_rng(), &mut transformed);
+        let transform_info =
+            transform.operate(&mut rand::thread_rng(), &instr_whitelist, &mut transformed);
 
         if transform_info.success {
             assert_ne!(transformed, original);
@@ -201,6 +216,8 @@ mod test {
 
     #[test]
     fn operand_transform_test() {
+        let instr_whitelist = Whitelist::new(1, 0, &[1]);
+
         let transform = Transform::new(TransformKind::Operand);
         assert_eq!(transform.kind(), TransformKind::Operand);
 
@@ -208,17 +225,14 @@ mod test {
             &FunctionType::new(vec![ValueType::I32], Some(ValueType::I32)),
             &FuncBody::new(
                 vec![],
-                Instructions::new(vec![
-                    Instruction::Nop,
-                    Instruction::End,
-                    Instruction::I32Const(1),
-                ]),
+                Instructions::new(vec![Instruction::Nop, Instruction::I32Const(1)]),
             ),
             vec![-2, -1, 0, 1, 2],
         );
 
         let mut transformed = original.clone();
-        let transform_info = transform.operate(&mut rand::thread_rng(), &mut transformed);
+        let transform_info =
+            transform.operate(&mut rand::thread_rng(), &instr_whitelist, &mut transformed);
 
         if transform_info.success {
             assert_ne!(transformed, original);
@@ -234,6 +248,8 @@ mod test {
 
     #[test]
     fn swap_transform_test() {
+        let instr_whitelist = Whitelist::new(1, 0, &[1]);
+
         let transform = Transform::new(TransformKind::Swap);
         assert_eq!(transform.kind(), TransformKind::Swap);
 
@@ -241,17 +257,14 @@ mod test {
             &FunctionType::new(vec![ValueType::I32], Some(ValueType::I32)),
             &FuncBody::new(
                 vec![],
-                Instructions::new(vec![
-                    Instruction::Nop,
-                    Instruction::End,
-                    Instruction::I32Const(1),
-                ]),
+                Instructions::new(vec![Instruction::Nop, Instruction::I32Const(1)]),
             ),
             vec![-2, -1, 0, 1, 2],
         );
 
         let mut transformed = original.clone();
-        let transform_info = transform.operate(&mut rand::thread_rng(), &mut transformed);
+        let transform_info =
+            transform.operate(&mut rand::thread_rng(), &instr_whitelist, &mut transformed);
 
         if transform_info.success {
             assert_ne!(transformed, original);

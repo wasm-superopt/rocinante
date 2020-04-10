@@ -1,4 +1,4 @@
-use crate::stoke::whitelist;
+use crate::wasm::Whitelist;
 use parity_wasm::elements::Instruction;
 use std::cmp::Ordering;
 use std::result::Result;
@@ -30,12 +30,16 @@ impl Candidate {
     }
 
     /// Attempts to append the instruction to current program and returns a new candidate.
-    pub fn try_append(&self, instr: Instruction) -> Result<Self, AppendError> {
+    pub fn try_append(
+        &self,
+        instr_whitelist: &Whitelist,
+        instr: Instruction,
+    ) -> Result<Self, AppendError> {
         if self.next_index >= self.instrs.len() {
             return Err(AppendError::NextIndexOutOfBounds);
         }
 
-        let (pop_cnts, push_cnts) = whitelist::stack_cnt(&instr);
+        let (pop_cnts, push_cnts) = instr_whitelist.push_pop_cnts(&instr);
         if self.num_values_on_stack - pop_cnts < 0 {
             return Err(AppendError::StackUnderflow);
         }
@@ -102,31 +106,35 @@ mod tests {
 
     #[test]
     fn try_append_index_out_of_bounds_test() {
+        let instr_whitelist = Whitelist::new(1, 0, &[]);
         let candidate: Candidate = Candidate::new(0);
-        let result = candidate.try_append(Instruction::Nop);
+        let result = candidate.try_append(&instr_whitelist, Instruction::Nop);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), AppendError::NextIndexOutOfBounds);
     }
 
     #[test]
     fn try_append_stack_underflow_test() {
+        let instr_whitelist = Whitelist::new(1, 0, &[]);
         let candidate: Candidate = Candidate::new(1);
-        let result = candidate.try_append(Instruction::I32Add);
+
+        let result = candidate.try_append(&instr_whitelist, Instruction::I32Add);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), AppendError::StackUnderflow);
     }
 
     #[test]
     fn try_append_stack_overflow_test() {
+        let instr_whitelist = Whitelist::new(1, 0, &[1]);
         let mut candidate: Candidate = Candidate::new(3);
-        let mut result = candidate.try_append(Instruction::I32Const(1));
+        let mut result = candidate.try_append(&instr_whitelist, Instruction::I32Const(1));
         assert!(result.is_ok());
         candidate = result.unwrap();
-        result = candidate.try_append(Instruction::I32Const(1));
+        result = candidate.try_append(&instr_whitelist, Instruction::I32Const(1));
         assert!(result.is_ok());
         candidate = result.unwrap();
 
-        result = candidate.try_append(Instruction::I32Const(1));
+        result = candidate.try_append(&instr_whitelist, Instruction::I32Const(1));
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), AppendError::StackOverflow);
     }
