@@ -160,6 +160,7 @@ impl Superoptimizer {
         let ctx = z3::Context::new(&cfg);
         let z3_solver = solver::Z3Solver::new(&ctx, func_type, func_body);
 
+        // Timer to terminate the search after given computing budget.
         let timer = timer::Timer::new();
         let (tx, rx) = std::sync::mpsc::channel();
         // It's necessary to name this variable to trigger the callback.
