@@ -22,7 +22,6 @@ use parity_wasm::elements::{FuncBody, FunctionType, Instruction, Internal, Modul
 use std::path::PathBuf;
 use structopt::StructOpt;
 
-pub mod enumerative;
 pub mod exec;
 pub mod parity_wasm_utils;
 pub mod solver;
@@ -32,7 +31,6 @@ pub mod wasm;
 #[derive(Clone, Debug, StructOpt)]
 pub enum Algorithm {
     Stoke(StokeOpts),
-    Enumerative,
 }
 
 #[derive(Clone, Debug, StructOpt)]
@@ -180,9 +178,6 @@ impl Superoptimizer {
                 interpreter.as_mut(),
                 &mut spec,
             ),
-            Algorithm::Enumerative => {
-                enumerative::search(options, &rx, &z3_solver, interpreter.as_mut(), &mut spec)
-            }
         }
     }
 }
