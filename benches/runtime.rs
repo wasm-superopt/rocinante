@@ -6,16 +6,16 @@ fn wasmtime_invoke(binary: &[u8], func_name: &str, inputs: &[i32]) {
 
     let store = wasmtime::Store::default();
     let module = Module::new(&store, &binary).unwrap();
-    let instance = Instance::new(&store, &module, &[]).unwrap();
+    let instance = Instance::new(&module, &[]).unwrap();
 
     let func = instance
-        .find_export_by_name(func_name)
+        .get_export(func_name)
         .expect(func_name)
         .func()
         .unwrap();
 
     for input in inputs {
-        let _result = func.borrow().call(&[wasmtime::Val::I32(*input)]).unwrap();
+        let _result = func.call(&[wasmtime::Val::I32(*input)]).unwrap();
     }
 }
 
