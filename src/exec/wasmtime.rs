@@ -1,5 +1,6 @@
 use super::{Interpreter, InterpreterKind, NUM_TEST_CASES};
 use rand::Rng;
+use std::borrow::Borrow;
 use wasmtime::*;
 
 pub type Input = Vec<Val>;
@@ -20,9 +21,9 @@ impl Wasmtime {
     pub fn new(spec: &[u8], func_name: &str) -> Self {
         let store = wasmtime::Store::default();
         let module = Module::new(&store, &spec).unwrap();
-        let instance = Instance::new(&store, &module, &[]).unwrap();
+        let instance = Instance::new(&module, &[]).unwrap();
         let func = instance
-            .find_export_by_name(func_name)
+            .get_export(func_name)
             .unwrap()
             .func()
             .unwrap()
@@ -30,12 +31,12 @@ impl Wasmtime {
 
         let mut inputs: Vec<Input> = Vec::with_capacity(NUM_TEST_CASES);
         for _ in 0..NUM_TEST_CASES {
-            inputs.push(gen_random_input(func.r#type().params()));
+            inputs.push(gen_random_input(func.ty().params()));
         }
         let outputs: Vec<Output> = inputs.iter().map(|input| func.call(input)).collect();
         let test_cases = inputs.into_iter().zip(outputs.into_iter()).collect();
 
-        let return_type = func.r#type().results();
+        let return_type = func.ty().results();
         let mut return_type_bits = Vec::new();
         for typ in return_type {
             match typ {
@@ -48,9 +49,6 @@ impl Wasmtime {
             }
         }
 
-        // TODO(taegyunkim): Instead of explicitly dropping the reference, just keep it by
-        // specifying explicit lifetime.
-        drop(func);
         Self {
             store,
             instance,
@@ -71,10 +69,10 @@ impl Interpreter for Wasmtime {
     fn eval_test_cases(&self, binary: &[u8]) -> u32 {
         let module_or_err = Module::new(&self.store, &binary);
         let module = module_or_err.unwrap();
-        let instance_or_err = Instance::new(&self.store, &module, &[]);
+        let instance_or_err = Instance::new(&module, &[]);
         let instance = instance_or_err.unwrap();
         let func = instance
-            .find_export_by_name("candidate")
+            .get_export("candidate")
             .expect("Export with name candidate doesn't exist, should never happen.")
             .func()
             .expect("Export candidate is not a function, should never happen.")
@@ -90,7 +88,7 @@ impl Interpreter for Wasmtime {
     fn add_test_case(&mut self, input: Vec<::wasmer_runtime::Value>) {
         let func = self
             .instance
-            .find_export_by_name(&self.func_name)
+            .get_export(&self.func_name)
             .unwrap()
             .func()
             .unwrap()
