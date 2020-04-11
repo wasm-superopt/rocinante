@@ -1,5 +1,5 @@
 use parity_wasm::elements::{FuncBody, FunctionType, Instruction, Local, ValueType};
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryFrom;
 use std::fmt::Debug;
 use z3::{ast, ast::Ast, Context, Solver};
 
@@ -440,16 +440,7 @@ impl<'ctx> Z3Solver<'ctx> {
         let candidate_f = self.converter.convert(instrs);
         let solver = Solver::new(&self.ctx);
 
-        let exists: ast::Bool = ast::exists_const(
-            &self.ctx,
-            self.converter.bounds().as_slice(),
-            &[],
-            &self.spec_f._eq(&candidate_f).not().into(),
-        )
-        .try_into()
-        .unwrap();
-
-        solver.assert(&exists);
+        solver.assert(&self.spec_f._eq(&candidate_f).not());
 
         match solver.check() {
             z3::SatResult::Sat => {
@@ -604,12 +595,9 @@ mod tests {
             r#"(module
                 (type $t0 (func (param i32) (result i32)))
                 (func $add (type $t0) (param $p0 i32) (result i32)
-                i32.const 0
-                local.get 0
-                i32.sub
-                local.get 0
-                i32.and
-                )
+                  local.get $p0
+                  local.get $p0
+                  i32.add)
                 (export "add" (func $add)))"#,
         );
         let (spec_func_type, spec_func_body) = parity_wasm_utils::func_by_name(&spec_module, "add");
@@ -617,12 +605,9 @@ mod tests {
             r#"(module
                 (type $t0 (func (param i32) (result i32)))
                 (func $mul (type $t0) (param $p0 i32) (result i32)
-                i32.const 1
-                  local.get 0
-                  i32.ctz
-                  i32.shl
-
-                  )
+                  local.get $p0
+                  i32.const 3
+                  i32.mul)
                 (export "mul" (func $mul)))"#,
         );
         let (candidate_func_type, candidate_func_body) =
@@ -692,7 +677,7 @@ mod tests {
         let ctx = z3::Context::new(&cfg);
 
         let solver = Z3Solver::new(&ctx, spec_func_type, spec_func_body);
-        let result = solver.verify(candidate_func_body);
+        let result = solver.verify(candidate_func_body.code().elements());
         assert_matches!(result, VerifyResult::CounterExample(_));
         if let VerifyResult::CounterExample(cex_vec) = result {
             let cex_vec = to_wasmi_values(cex_vec);
