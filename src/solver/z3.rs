@@ -41,9 +41,14 @@ impl<'ctx> ValueStack<'ctx> {
 
 #[derive(Debug)]
 pub struct Converter<'ctx> {
+    /// Z3 Context
     ctx: &'ctx Context,
+    /// Z3 variable representing the parameters of spec function.
     z3_params: Vec<ast::Dynamic<'ctx>>,
+    /// Spec function type
     func_type: FunctionType,
+    /// Local variable types, doesn't include the parameters though they're also accessed via the
+    /// same `local.{get, set, tee}` instructions.
     local_types: Vec<ValueType>,
 }
 
