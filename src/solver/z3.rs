@@ -217,29 +217,36 @@ impl<'ctx> Converter<'ctx> {
                 }
                 Instruction::I32Shl => {
                     let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
-                    let res = lhs.bvshl(&rhs);
+                    // NOTE(taegyunkim): The WASM spec tests performs shifts by modulo 32, ditto
+                    // all shift and rotate instructions.
+                    let shift_cnt = rhs.bvand(&ast::BV::from_i64(&self.ctx, 31, 32));
+                    let res = lhs.bvshl(&shift_cnt);
                     stack.push(res);
                 }
                 Instruction::I32ShrS => {
                     // NOTE(taegyunkim): sign-replicating (arithmetic) shift right.
                     let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
-                    let res = lhs.bvashr(&rhs);
+                    let shift_cnt = rhs.bvand(&ast::BV::from_i64(&self.ctx, 31, 32));
+                    let res = lhs.bvashr(&shift_cnt);
                     stack.push(res);
                 }
                 Instruction::I32ShrU => {
                     // NOTE(taegyunkim): zero-replicating (logical) shift right.
                     let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
-                    let res = lhs.bvlshr(&rhs);
+                    let shift_cnt = rhs.bvand(&ast::BV::from_i64(&self.ctx, 31, 32));
+                    let res = lhs.bvlshr(&shift_cnt);
                     stack.push(res);
                 }
                 Instruction::I32Rotl => {
                     let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
-                    let res = lhs.bvrotl(&rhs);
+                    let rotate_cnt = rhs.bvand(&ast::BV::from_i64(&self.ctx, 31, 32));
+                    let res = lhs.bvrotl(&rotate_cnt);
                     stack.push(res);
                 }
                 Instruction::I32Rotr => {
                     let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
-                    let res = lhs.bvrotr(&rhs);
+                    let rotate_cnt = rhs.bvand(&ast::BV::from_i64(&self.ctx, 31, 32));
+                    let res = lhs.bvrotr(&rotate_cnt);
                     stack.push(res);
                 }
                 // local variable ops
@@ -611,6 +618,61 @@ mod tests {
             println!("{:?} {:?} {:?}", cex_vec, spec_output, candidate_output);
         }
     }
+
+    #[test]
+    // A test case that discvered bug in shift and rotate instructions.
+    fn shift_verify_test() {
+        let spec_module: parity_wasm::elements::Module = wat2module(
+            r#"(module
+                (type $t0 (func (param i32) (result i32)))
+                (func $p3 (type $t0) (param $p0 i32) (result i32)
+                  i32.const 0
+                  local.get 0
+                  i32.sub
+                  local.get 0
+                  i32.and)
+                (export "p3" (func $p3)))"#,
+        );
+        let (spec_func_type, spec_func_body) = parity_wasm_utils::func_by_name(&spec_module, "p3");
+        let candidate_module: parity_wasm::elements::Module = wat2module(
+            r#"(module
+                (type $t0 (func (param i32) (result i32)))
+                (func $candidate (type $t0) (param $p0 i32) (result i32)
+                  i32.const 1
+                  local.get 0
+                  i32.ctz
+                  i32.shl)
+                (export "candidate" (func $candidate)))"#,
+        );
+        let (candidate_func_type, candidate_func_body) =
+            parity_wasm_utils::func_by_name(&candidate_module, "candidate");
+        assert_eq!(spec_func_type, candidate_func_type);
+
+        let cfg = z3::Config::new();
+        let ctx = z3::Context::new(&cfg);
+
+        let solver = Z3Solver::new(&ctx, spec_func_type, spec_func_body);
+        let result = solver.verify(candidate_func_body);
+        assert_matches!(result, VerifyResult::CounterExample(_));
+        if let VerifyResult::CounterExample(cex_vec) = result {
+            let cex_vec = to_wasmi_values(cex_vec);
+            assert_eq!(cex_vec, vec![wasmi::RuntimeValue::I32(0)]);
+
+            let spec_instance = instantiate(spec_module);
+            let spec_output = spec_instance
+                .invoke_export("p3", &cex_vec, &mut wasmi::NopExternals)
+                .unwrap();
+
+            let candidate_instance = instantiate(candidate_module);
+            let candidate_output = candidate_instance
+                .invoke_export("candidate", &cex_vec, &mut wasmi::NopExternals)
+                .unwrap();
+            assert_ne!(spec_output, candidate_output);
+            assert_eq!(spec_output, Some(wasmi::RuntimeValue::I32(0)));
+            assert_eq!(candidate_output, Some(wasmi::RuntimeValue::I32(1)));
+        }
+    }
+
     #[test]
     fn ctz_test() {
         let _ = env_logger::try_init();
