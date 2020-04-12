@@ -15,6 +15,7 @@ pub fn search(
     // TODO(taegyunkim): Support multiple return values.
     let return_type_len = spec.return_type_len() as i32;
 
+    // A heap to keep track WASM programs in increasing number of instructions.
     let mut candidates: BinaryHeap<wasm::Candidate> = BinaryHeap::new();
     candidates.push(wasm::Candidate::new(spec.num_instrs()));
 
