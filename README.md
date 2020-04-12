@@ -17,6 +17,8 @@
 
 ```shell
 $> cargo run -- help
+rocinante 0.1.0
+WebAssembly Superoptimizer
 
 USAGE:
     rocinante [FLAGS] [OPTIONS] <FILE> <SUBCOMMAND>
@@ -41,8 +43,9 @@ ARGS:
     <FILE>
 
 SUBCOMMANDS:
-    help     Prints this message or the help of the given subcommand(s)
-    stoke    Stochastic search specific options.
+    enumerative
+    help           Prints this message or the help of the given subcommand(s)
+    stoke          Stochastic search specific options.
 ```
 
 ```shell
@@ -61,11 +64,13 @@ OPTIONS:
 ```
 
 ```shell
-$> cargo run -- ./examples/times-two/add.wat Stoke
-```
+$> cargo run -- enumerative --help
+USAGE:
+    rocinante <FILE> enumerative
 
-```shell
-cargo run -- <FILE> print
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
 ```
 
 1. Reads `.wat` or `.wasm` file into binary format.
