@@ -17,6 +17,8 @@ extern crate wat;
 
 use crate::exec::InterpreterKind;
 use crate::stoke::StokeOpts;
+use parity_wasm::elements::{FuncBody, FunctionType, Instruction, Internal, Module};
+
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -24,6 +26,7 @@ pub mod exec;
 pub mod parity_wasm_utils;
 pub mod solver;
 pub mod stoke;
+pub mod wasm;
 
 #[derive(Clone, Debug, StructOpt)]
 pub enum Algorithm {
@@ -71,4 +74,132 @@ pub struct SuperoptimizerOpts {
 
     #[structopt(subcommand)]
     pub algorithm: Algorithm,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Mode {
+    Synthesis,
+    Optimization,
+}
+
+pub struct Superoptimizer {
+    spec: Vec<u8>,
+    options: SuperoptimizerOpts,
+}
+
+impl Superoptimizer {
+    pub fn new(spec: Vec<u8>, options: SuperoptimizerOpts) -> Self {
+        Superoptimizer { spec, options }
+    }
+
+    pub fn run(&self) {
+        let module = Module::from_bytes(&self.spec).unwrap();
+
+        // TODO(taegyunkim): Use num_cpus crate to appropriately set the number of workers.
+        let num_workers = 1;
+        let mut candidates: Vec<wasm::Candidate> = Vec::with_capacity(num_workers);
+
+        let export_section = module
+            .export_section()
+            .expect("Module doesn't have export section.");
+
+        for export_entry in export_section.entries() {
+            if let Internal::Function(_idx) = export_entry.internal() {
+                let func_name = export_entry.field();
+
+                let (func_type, func_body) = parity_wasm_utils::func_by_name(&module, func_name);
+
+                // TODO(taegyunkim): Parallel processing.
+                for _ in 0..num_workers {
+                    if let Some(mut candidate) = self.invoke_search(
+                        func_name,
+                        func_type,
+                        func_body,
+                        &self.options,
+                        Mode::Synthesis,
+                    ) {
+                        candidate.strip_nops();
+                        candidates.push(candidate.clone());
+                        if !self.options.opti {
+                            continue;
+                        }
+
+                        if let Some(mut candidate) = self.invoke_search(
+                            func_name,
+                            func_type,
+                            func_body,
+                            &self.options,
+                            Mode::Optimization,
+                        ) {
+                            candidate.strip_nops();
+                            candidates.push(candidate.clone());
+                        }
+                    }
+                }
+            }
+        }
+
+        rank(&candidates);
+    }
+
+    fn invoke_search(
+        &self,
+        func_name: &str,
+        func_type: &FunctionType,
+        func_body: &FuncBody,
+        options: &SuperoptimizerOpts,
+        mode: Mode,
+    ) -> Option<wasm::Candidate> {
+        // NOTE(taegyunkim): Interpreter is not thread safe.
+        let mut interpreter =
+            exec::get_interpreter(options.interpreter_kind, &self.spec, func_name);
+
+        let mut spec = wasm::Spec::new(func_type, func_body);
+
+        let cfg = z3::Config::new();
+        let ctx = z3::Context::new(&cfg);
+        let z3_solver = solver::Z3Solver::new(&ctx, func_type, func_body);
+
+        // Timer to terminate the search after given computing budget.
+        let timer = timer::Timer::new();
+        let (tx, rx) = std::sync::mpsc::channel();
+        // It's necessary to name this variable to trigger the callback.
+        let _guard =
+            timer.schedule_with_delay(chrono::Duration::minutes(options.time_budget), move || {
+                let _ = tx.send(());
+            });
+
+        match &options.algorithm {
+            Algorithm::Stoke(stoke_options) => stoke::search(
+                options,
+                stoke_options,
+                mode,
+                &rx,
+                &z3_solver,
+                interpreter.as_mut(),
+                &mut spec,
+            ),
+        }
+    }
+}
+
+pub fn rank(candidates: &[wasm::Candidate]) {
+    println!("Found {} programs", candidates.len());
+
+    let best = candidates
+        .iter()
+        .min_by(|a, b| perf(a.instrs()).cmp(&perf(b.instrs())))
+        .unwrap();
+
+    println!("{:?}", best.instrs());
+}
+
+pub fn perf(instrs: &[Instruction]) -> u32 {
+    let mut cnt = 0;
+    for instr in instrs {
+        if *instr != Instruction::Nop {
+            cnt += 1;
+        }
+    }
+    cnt
 }
