@@ -1,5 +1,6 @@
 use super::{Interpreter, InterpreterKind, NUM_TEST_CASES};
 use rand::Rng;
+use wasmer_runtime::error::CallResult;
 use wasmer_runtime::*;
 
 pub type Input = Vec<Value>;
@@ -69,6 +70,24 @@ impl Interpreter for Wasmer {
             dist += hamming_distance(&expected_output, &actual_output);
         }
         dist
+    }
+
+    fn get_test_outputs(&self, binary: &[u8]) -> Vec<CallResult<Vec<Value>>> {
+        let import_object = imports! {};
+        let instance_or_err = instantiate(binary, &import_object);
+        let instance = instance_or_err.unwrap();
+        let func_or_err = instance.dyn_func("candidate");
+        let func = func_or_err.unwrap();
+
+        let mut diffs = Vec::new();
+        for (input, expected_output) in &self.test_cases {
+            let actual_output = func.call(&input);
+            if *expected_output != actual_output {
+                diffs.push(actual_output);
+            }
+        }
+
+        diffs
     }
 
     fn add_test_case(&mut self, input: Vec<::wasmer_runtime::Value>) {

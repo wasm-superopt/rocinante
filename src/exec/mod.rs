@@ -22,6 +22,12 @@ pub trait Interpreter {
     // rust will panic.
     fn eval_test_cases(&self, binary: &[u8]) -> u32;
 
+    /// Returns test case outputs that are different from the expected outputs.
+    fn get_test_outputs(
+        &self,
+        binary: &[u8],
+    ) -> Vec<wasmer_runtime::error::CallResult<Vec<wasmer_runtime::Value>>>;
+
     /// Score for an invalid WASM program.
     fn score_invalid(&self) -> u32 {
         self.num_test_cases() as u32 * self.return_bit_width()

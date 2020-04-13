@@ -85,6 +85,13 @@ impl Interpreter for Wasmtime {
         dist
     }
 
+    fn get_test_outputs(
+        &self,
+        _binary: &[u8],
+    ) -> Vec<wasmer_runtime::error::CallResult<Vec<wasmer_runtime::Value>>> {
+        panic!("Unimplemented.");
+    }
+
     fn add_test_case(&mut self, input: Vec<::wasmer_runtime::Value>) {
         let func = self
             .instance
