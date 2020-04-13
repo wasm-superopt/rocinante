@@ -17,6 +17,7 @@ A superoptimizer for WebAssembly
 [dependencies]
 chrono = "*"
 clap = "*"
+itertools = "*"
 num_cpus = "*"
 parity-wasm = "*"
 rand = "*"
