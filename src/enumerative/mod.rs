@@ -19,16 +19,16 @@ pub fn search(
     let mut seen_candidates: Vec<Vec<parity_wasm::elements::Instruction>> = Vec::new();
 
     for i in 1..=max_length {
-        if rx.try_recv().is_ok() {
-            println!("Enumerative search timed out.");
-            return None;
-        }
-
         let iter = (0..i)
             .map(|_| instr_whitelist.iter())
             .multi_cartesian_product();
 
         for candidate in iter {
+            if rx.try_recv().is_ok() {
+                println!("Enumerative search timed out.");
+                return None;
+            }
+
             if let wasm::StackState::Valid = wasm::check_stack_state(&instr_whitelist, &candidate) {
                 let instrs: Vec<parity_wasm::elements::Instruction> =
                     candidate.iter().map(|&item| item.clone()).collect();
