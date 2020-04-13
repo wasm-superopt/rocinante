@@ -1332,6 +1332,7 @@ dependencies = [
  "criterion",
  "env_logger 0.7.1",
  "getopts",
+ "itertools",
  "log",
  "matches",
  "num_cpus",

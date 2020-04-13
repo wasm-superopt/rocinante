@@ -144,6 +144,25 @@ impl Candidate {
         }
     }
 }
+
+pub fn check_stack_state(instr_whitelist: &Whitelist, instrs: &[&Instruction]) -> StackState {
+    let mut cnt: i32 = 0;
+    let mut valid = true;
+    for instr in instrs {
+        let (pop, push) = instr_whitelist.push_pop_cnts(instr);
+        cnt -= pop;
+        if cnt < 0 {
+            valid = false;
+        }
+        cnt += push;
+    }
+    if cnt == 1 && valid {
+        StackState::Valid
+    } else {
+        StackState::Invalid(cnt)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
