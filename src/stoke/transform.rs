@@ -10,15 +10,17 @@ pub enum TransformKind {
     Operand,
     Swap,
     Instruction,
+    TwoInstructions,
 }
 
 impl Distribution<TransformKind> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> TransformKind {
-        match rng.gen_range(0, 4) {
+        match rng.gen_range(0, 5) {
             0 => TransformKind::Opcode,
             1 => TransformKind::Operand,
             2 => TransformKind::Swap,
-            _ => TransformKind::Instruction,
+            3 => TransformKind::Instruction,
+            _ => TransformKind::TwoInstructions,
         }
     }
 }
@@ -28,7 +30,7 @@ pub struct TransformInfo {
     success: bool,
     kind: TransformKind,
     undo_indices: [usize; 2],
-    undo_instr: Instruction,
+    undo_instrs: [Instruction; 2],
 }
 
 pub struct Transform {
@@ -56,6 +58,9 @@ impl Transform {
             TransformKind::Operand => self.operand(rng, instr_whitelist, candidate_func),
             TransformKind::Swap => self.swap(rng, candidate_func),
             TransformKind::Instruction => self.instruction(rng, instr_whitelist, candidate_func),
+            TransformKind::TwoInstructions => {
+                self.two_instructions(rng, instr_whitelist, candidate_func)
+            }
         }
     }
 
@@ -74,7 +79,16 @@ impl Transform {
         match transform_info.kind {
             TransformKind::Opcode | TransformKind::Operand | TransformKind::Instruction => {
                 candidate_func.instrs_mut()[transform_info.undo_indices[0]] =
-                    transform_info.undo_instr.clone();
+                    transform_info.undo_instrs[0].clone();
+            }
+            TransformKind::TwoInstructions => {
+                // Must undo the second instruction first in case
+                // both instruction transformations affected the
+                // same index
+                candidate_func.instrs_mut()[transform_info.undo_indices[1]] =
+                    transform_info.undo_instrs[1].clone();
+                candidate_func.instrs_mut()[transform_info.undo_indices[0]] =
+                    transform_info.undo_instrs[0].clone();
             }
             TransformKind::Swap => {
                 candidate_func.instrs_mut().swap(
@@ -101,7 +115,7 @@ impl Transform {
             success: new_instr != undo_instr,
             kind: TransformKind::Opcode,
             undo_indices: [idx, 0],
-            undo_instr,
+            undo_instrs: [undo_instr, parity_wasm::elements::Instruction::Nop],
         }
     }
 
@@ -164,7 +178,7 @@ impl Transform {
             success: new_instr != undo_instr,
             kind: TransformKind::Operand,
             undo_indices: [instr_idx, 0],
-            undo_instr,
+            undo_instrs: [undo_instr, parity_wasm::elements::Instruction::Nop],
         }
     }
 
@@ -178,7 +192,10 @@ impl Transform {
             success: idx1 != idx2 && instr1 != instr2,
             kind: TransformKind::Swap,
             undo_indices: [idx1, idx2],
-            undo_instr: parity_wasm::elements::Instruction::Nop,
+            undo_instrs: [
+                parity_wasm::elements::Instruction::Nop,
+                parity_wasm::elements::Instruction::Nop,
+            ],
         }
     }
 
@@ -198,7 +215,28 @@ impl Transform {
             success: new_instr != undo_instr,
             kind: TransformKind::Instruction,
             undo_indices: [instr_idx, 0],
-            undo_instr,
+            undo_instrs: [undo_instr, parity_wasm::elements::Instruction::Nop],
+        }
+    }
+    fn two_instructions<R: Rng + ?Sized>(
+        &self,
+        rng: &mut R,
+        instr_whitelist: &Whitelist,
+        candidate_func: &mut Candidate,
+    ) -> TransformInfo {
+        let first_transform = self.instruction(rng, instr_whitelist, candidate_func);
+
+        let second_transform = self.instruction(rng, instr_whitelist, candidate_func);
+
+        let idx1 = first_transform.undo_indices[0];
+        let idx2 = second_transform.undo_indices[0];
+        let undo_instr1 = first_transform.undo_instrs[0].clone();
+        let undo_instr2 = second_transform.undo_instrs[0].clone();
+        TransformInfo {
+            success: first_transform.success && second_transform.success && idx1 != idx2,
+            kind: TransformKind::TwoInstructions,
+            undo_indices: [idx1, idx2],
+            undo_instrs: [undo_instr1, undo_instr2],
         }
     }
 }
