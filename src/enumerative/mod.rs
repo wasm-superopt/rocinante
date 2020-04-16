@@ -20,8 +20,11 @@ pub fn search(
     let mut seen_candidates: Vec<Vec<parity_wasm::elements::Instruction>> = Vec::new();
     let mut seen_states: Vec<_> = Vec::new();
 
+    println!("");
+    let start = std::time::Instant::now();
     // Enumerates programs of length i to max_length
     for i in 1..=max_length {
+        let mut num_valid = 0;
         // Creates a multi cartesian product of iterators over the whitelisted instructions.
         // For example, if we're given [1, 2, 3], then there are 9 length 2 candidates as following
         // [1, 1], [1, 2], [1, 3].
@@ -40,6 +43,7 @@ pub fn search(
             }
 
             if let wasm::StackState::Valid = wasm::check_stack_state(&instr_whitelist, &candidate) {
+                num_valid += 1;
                 // Explicitly copy the instruction list to keep track of them.
                 let instrs: Vec<parity_wasm::elements::Instruction> =
                     candidate.iter().map(|&item| item.clone()).collect();
@@ -80,6 +84,13 @@ pub fn search(
                 }
             }
         }
+
+        println!(
+            "{:?} Enumerated all programs of length {}, total num_valid {}",
+            std::time::Instant::now().duration_since(start),
+            i,
+            num_valid
+        );
     }
 
     None

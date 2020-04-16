@@ -100,7 +100,6 @@ impl Superoptimizer {
 
         // TODO(taegyunkim): Use num_cpus crate to appropriately set the number of workers.
         let num_workers = 1;
-        let mut candidates: Vec<wasm::Candidate> = Vec::with_capacity(num_workers);
 
         let export_section = module
             .export_section()
@@ -108,9 +107,12 @@ impl Superoptimizer {
 
         for export_entry in export_section.entries() {
             if let Internal::Function(_idx) = export_entry.internal() {
+                let mut candidates: Vec<wasm::Candidate> = Vec::with_capacity(num_workers);
+
                 let func_name = export_entry.field();
 
                 let (func_type, func_body) = parity_wasm_utils::func_by_name(&module, func_name);
+                let mut spec = wasm::Spec::new(func_type, func_body);
 
                 // TODO(taegyunkim): Parallel processing.
                 for _ in 0..num_workers {
@@ -139,10 +141,10 @@ impl Superoptimizer {
                         }
                     }
                 }
+
+                rank(&mut spec, &candidates);
             }
         }
-
-        rank(&candidates);
     }
 
     fn invoke_search(
@@ -189,15 +191,16 @@ impl Superoptimizer {
     }
 }
 
-pub fn rank(candidates: &[wasm::Candidate]) {
-    println!("Found {} programs", candidates.len());
-
+pub fn rank(spec: &mut wasm::Spec, candidates: &[wasm::Candidate]) {
     let best = candidates
         .iter()
         .min_by(|a, b| perf(a.instrs()).cmp(&perf(b.instrs())))
         .unwrap();
 
-    println!("{:?}", best.instrs());
+    println!(
+        "\n{}",
+        wasmprinter::print_bytes(spec.get_binary_with_instrs(best.instrs())).unwrap()
+    );
 }
 
 pub fn perf(instrs: &[Instruction]) -> u32 {
