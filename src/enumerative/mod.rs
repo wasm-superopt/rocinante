@@ -20,7 +20,7 @@ pub fn search(
     let mut seen_candidates: Vec<Vec<parity_wasm::elements::Instruction>> = Vec::new();
     let mut seen_states: Vec<_> = Vec::new();
 
-    println!("");
+    println!();
     let start = std::time::Instant::now();
     // Enumerates programs of length i to max_length
     for i in 1..=max_length {
