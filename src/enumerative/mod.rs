@@ -2,7 +2,7 @@ use crate::bus::BusReader;
 use crate::SuperoptimizerOpts;
 use crate::{exec, solver, wasm};
 use itertools::Itertools;
-use std::sync::mpsc::{Receiver, TryRecvError};
+use std::sync::mpsc::TryRecvError;
 
 pub fn search(
     options: &SuperoptimizerOpts,
