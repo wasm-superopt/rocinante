@@ -99,6 +99,7 @@ pub fn search(
         {
             match z3_solver.verify(&candidate.instrs()) {
                 solver::VerifyResult::Verified => {
+                    println!("ACCEPTED! Now cancelling all other threads ... ");
                     return Some(candidate);
                 }
                 solver::VerifyResult::CounterExample(values) => {

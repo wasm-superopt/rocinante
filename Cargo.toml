@@ -15,6 +15,7 @@ A superoptimizer for WebAssembly
 """
 
 [dependencies]
+bus = "*"
 chrono = "*"
 clap = "*"
 itertools = "*"

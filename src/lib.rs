@@ -1,4 +1,4 @@
-//extern crate bus;
+extern crate bus;
 extern crate chrono;
 extern crate clap;
 extern crate itertools;
@@ -17,14 +17,13 @@ extern crate wasmprinter;
 extern crate wast;
 extern crate wat;
 
-use std::thread;
-//use std::time::Duration;
-//use std::sync::mpsc::{sync_channel, TryRecvError};
 use crate::exec::InterpreterKind;
 use crate::stoke::StokeOpts;
 use parity_wasm::elements::{FuncBody, FunctionType, Instruction, Internal, Module};
 use std::path::PathBuf;
+use std::sync::mpsc::{sync_channel, TryRecvError};
 use std::sync::{Arc, Mutex};
+use std::thread;
 use structopt::StructOpt;
 
 pub mod enumerative;
@@ -101,30 +100,28 @@ impl Superoptimizer {
 
     pub fn run(&self) {
         let module = Module::from_bytes(&self.spec).unwrap();
-
-        // TODO(taegyunkim): Use num_cpus crate to appropriately set the number of workers.
         let num_workers = num_cpus::get();
         let candidates = Arc::new(Mutex::new(Vec::with_capacity(num_workers)));
-
+        let (res_sender, _res_receiver) = sync_channel(num_workers);
+        let mut bus: bus::Bus<i32> = bus::Bus::new(num_workers);
         let export_section = module
             .export_section()
             .expect("Module doesn't have export section.");
-
         for export_entry in export_section.entries() {
             if let Internal::Function(_idx) = export_entry.internal() {
                 let mut threads = Vec::new();
-                // TODO(taegyunkim): Parallel processing.
                 for _ in 0..num_workers {
                     let func_name = export_entry.field().to_string();
                     let tmp_options = self.options.clone();
                     let tmp_spec = self.spec.clone();
-                    let module2 = module.clone();
-                    // let res_sender_i = res_sender.clone();
+                    let tmp_module = module.clone();
+                    let mut bus_rx_i = bus.add_rx();
+                    let res_sender_i = res_sender.clone();
                     threads.push(thread::spawn({
                         let candidates_clone = Arc::clone(&candidates);
                         move || {
                             let (func_type, func_body) =
-                                parity_wasm_utils::func_by_name(&module2, &func_name);
+                                parity_wasm_utils::func_by_name(&tmp_module, &func_name);
                             if let Some(mut candidate) = invoke_search(
                                 &tmp_spec,
                                 &func_name,
@@ -133,10 +130,18 @@ impl Superoptimizer {
                                 &tmp_options,
                                 Mode::Synthesis,
                             ) {
+                                res_sender_i.send(1).unwrap();
+                                println!("Found candidate: {:?}", candidate);
                                 candidate.strip_nops();
-                                let mut locked_candidates = candidates_clone.lock().unwrap();
-                                locked_candidates.push(candidate);
-
+                                {
+                                    let mut locked_candidates = candidates_clone.lock().unwrap();
+                                    locked_candidates.push(candidate);
+                                    println!("candidates length: {}", locked_candidates.len());
+                                }
+                                match bus_rx_i.try_recv() {
+                                    Ok(_) | Err(TryRecvError::Disconnected) => return,
+                                    _ => (),
+                                };
                                 if tmp_options.opti {
                                     if let Some(mut candidate) = invoke_search(
                                         &tmp_spec,
@@ -153,14 +158,20 @@ impl Superoptimizer {
                                     }
                                 }
                             }
-
                             // Signal here
                         }
                     }));
                 }
-                for t in threads {
+                for (i, t) in threads.into_iter().enumerate() {
                     t.join().unwrap();
+                    println!("Joining thread {}", i);
                 }
+                /*
+                let response = res_receiver.recv().unwrap();
+                println!("RECEIVED SIGNAL from thread!! Cancelling all other threads");
+                if response == 1 {
+                  bus.broadcast(1);
+                }*/
             }
         }
         let locked_clone = Arc::clone(&candidates);
