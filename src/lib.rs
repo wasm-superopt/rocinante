@@ -210,7 +210,7 @@ fn invoke_search(
         ),
         Algorithm::Enumerative => enumerative::search(
             options,
-            &timer_rx,
+            (&timer_rx, bus_rx),
             &z3_solver,
             interpreter.as_mut(),
             &mut spec,

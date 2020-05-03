@@ -1,10 +1,12 @@
+use crate::bus::BusReader;
 use crate::SuperoptimizerOpts;
 use crate::{exec, solver, wasm};
 use itertools::Itertools;
+use std::sync::mpsc::{Receiver, TryRecvError};
 
 pub fn search(
     options: &SuperoptimizerOpts,
-    rx: &std::sync::mpsc::Receiver<()>,
+    (timer_rx, bus_rx): (&std::sync::mpsc::Receiver<()>, &mut BusReader<()>),
     z3_solver: &solver::Z3Solver,
     interpreter: &mut dyn exec::Interpreter,
     spec: &mut wasm::Spec,
@@ -34,10 +36,14 @@ pub fn search(
             .multi_cartesian_product();
 
         for candidate in iter {
-            if rx.try_recv().is_ok() {
+            if timer_rx.try_recv().is_ok() {
                 println!("Enumerative search timed out.");
                 return None;
             }
+            match bus_rx.try_recv() {
+                Ok(_) | Err(TryRecvError::Disconnected) => break,
+                Err(TryRecvError::Empty) => (),
+            };
 
             if let wasm::StackState::Valid = wasm::check_stack_state(&instr_whitelist, &candidate) {
                 // Explicitly copy the instruction list to keep track of them.
