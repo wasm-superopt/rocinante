@@ -17,11 +17,12 @@ extern crate wasmprinter;
 extern crate wast;
 extern crate wat;
 
+use crate::bus::{Bus, BusReader};
 use crate::exec::InterpreterKind;
 use crate::stoke::StokeOpts;
 use parity_wasm::elements::{FuncBody, FunctionType, Instruction, Internal, Module};
 use std::path::PathBuf;
-use std::sync::mpsc::{sync_channel, TryRecvError};
+use std::sync::mpsc::sync_channel;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use structopt::StructOpt;
@@ -102,8 +103,8 @@ impl Superoptimizer {
         let module = Module::from_bytes(&self.spec).unwrap();
         let num_workers = num_cpus::get();
         let candidates = Arc::new(Mutex::new(Vec::with_capacity(num_workers)));
-        let (res_sender, _res_receiver) = sync_channel(num_workers);
-        let mut bus: bus::Bus<i32> = bus::Bus::new(num_workers);
+        let (res_sender, res_receiver) = sync_channel(num_workers);
+        let mut bus: Bus<()> = Bus::new(num_workers);
         let export_section = module
             .export_section()
             .expect("Module doesn't have export section.");
@@ -115,7 +116,7 @@ impl Superoptimizer {
                     let tmp_options = self.options.clone();
                     let tmp_spec = self.spec.clone();
                     let tmp_module = module.clone();
-                    let mut bus_rx_i = bus.add_rx();
+                    let mut bus_rx = bus.add_rx();
                     let res_sender_i = res_sender.clone();
                     threads.push(thread::spawn({
                         let candidates_clone = Arc::clone(&candidates);
@@ -129,19 +130,14 @@ impl Superoptimizer {
                                 func_body,
                                 &tmp_options,
                                 Mode::Synthesis,
+                                &mut bus_rx,
                             ) {
-                                res_sender_i.send(1).unwrap();
-                                println!("Found candidate: {:?}", candidate);
                                 candidate.strip_nops();
                                 {
+                                    // New scope to ensure mutex unlocks
                                     let mut locked_candidates = candidates_clone.lock().unwrap();
                                     locked_candidates.push(candidate);
-                                    println!("candidates length: {}", locked_candidates.len());
                                 }
-                                match bus_rx_i.try_recv() {
-                                    Ok(_) | Err(TryRecvError::Disconnected) => return,
-                                    _ => (),
-                                };
                                 if tmp_options.opti {
                                     if let Some(mut candidate) = invoke_search(
                                         &tmp_spec,
@@ -150,6 +146,7 @@ impl Superoptimizer {
                                         func_body,
                                         &tmp_options,
                                         Mode::Optimization,
+                                        &mut bus_rx,
                                     ) {
                                         candidate.strip_nops();
                                         let mut locked_candidates =
@@ -157,21 +154,17 @@ impl Superoptimizer {
                                         locked_candidates.push(candidate);
                                     }
                                 }
+                                res_sender_i.send(()).unwrap();
                             }
-                            // Signal here
                         }
                     }));
                 }
-                for (i, t) in threads.into_iter().enumerate() {
+                res_receiver.recv().unwrap();
+                bus.broadcast(());
+
+                for t in threads {
                     t.join().unwrap();
-                    println!("Joining thread {}", i);
                 }
-                /*
-                let response = res_receiver.recv().unwrap();
-                println!("RECEIVED SIGNAL from thread!! Cancelling all other threads");
-                if response == 1 {
-                  bus.broadcast(1);
-                }*/
             }
         }
         let locked_clone = Arc::clone(&candidates);
@@ -185,6 +178,7 @@ fn invoke_search(
     func_body: &FuncBody,
     options: &SuperoptimizerOpts,
     mode: Mode,
+    bus_rx: &mut BusReader<()>,
 ) -> Option<wasm::Candidate> {
     // NOTE(taegyunkim): Interpreter is not thread safe.
     let mut interpreter = exec::get_interpreter(options.interpreter_kind, spec, func_name);
@@ -197,7 +191,7 @@ fn invoke_search(
 
     // Timer to terminate the search after given computing budget.
     let timer = timer::Timer::new();
-    let (tx, rx) = std::sync::mpsc::channel();
+    let (tx, timer_rx) = std::sync::mpsc::channel();
     // It's necessary to name this variable to trigger the callback.
     let _guard =
         timer.schedule_with_delay(chrono::Duration::minutes(options.time_budget), move || {
@@ -209,14 +203,18 @@ fn invoke_search(
             options,
             stoke_options,
             mode,
-            &rx,
+            (&timer_rx, bus_rx),
             &z3_solver,
             interpreter.as_mut(),
             &mut spec,
         ),
-        Algorithm::Enumerative => {
-            enumerative::search(options, &rx, &z3_solver, interpreter.as_mut(), &mut spec)
-        }
+        Algorithm::Enumerative => enumerative::search(
+            options,
+            &timer_rx,
+            &z3_solver,
+            interpreter.as_mut(),
+            &mut spec,
+        ),
     }
 }
 pub fn rank(candidates: &[wasm::Candidate]) {
