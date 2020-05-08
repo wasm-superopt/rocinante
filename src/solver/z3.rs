@@ -1,5 +1,6 @@
 use parity_wasm::elements::{FuncBody, FunctionType, Instruction, Local, ValueType};
 use std::convert::TryFrom;
+use std::collections::HashMap;
 use std::fmt::Debug;
 use z3::{ast, ast::Ast, Context, Solver};
 
@@ -175,7 +176,38 @@ impl<'ctx> Converter<'ctx> {
 
         locals
     }
-
+/*
+    pub fn convert_to_formula(&self, instrs: &[Instruction]) -> (ast::BV<'ctx>, Vec< &ast::Int<'ctx>>) {
+        let mut locals: Vec<ast::Dynamic<'ctx>> = self.init_locals();
+        let mut stack = Vec::new();
+        //let mut holes = Vec::new();
+        let mut ctr = 0;
+        for instr in instrs {
+            match instr {
+                Instruction::I32Const(c) => {
+//                    let c = z3::ast::Int::new_const(&self.ctx, &format!("c{}", ctr));
+                    ctr+=1;
+ //                   stack.push(c)
+//                    stack.push(ast::BV::from_i64(&self.ctx, *c as i64, 32));
+                    //holes.push(
+                },
+                Instruction::GetLocal(idx) =>
+                    stack.push(locals[*idx as usize].as_bv().expect("Local is not BV")),
+                
+                Instruction::I32Add => {
+                    let lhs = stack.pop().expect("No more values on stack");
+                    let rhs = stack.pop().expect("No more values on stack");
+                    stack.push(lhs.bvadd(&rhs))
+                }
+                _ =>(), // panic!("Instruction not supported"),
+            };
+        }
+//        assert!(stack.len() <= 1);       
+        let c1 = z3::ast::Int::new_const(&self.ctx, "c1");
+        let c2 = z3::ast::Int::new_const(&self.ctx, "c2");
+        let vec = vec![&c1, &c2];
+        (c1.to_ast(32).bvadd(&c2.to_ast(32)), vec)
+    }*/
     // TODO(taegyunkim): Add test for each case.
     pub fn convert(&self, instrs: &[Instruction]) -> ast::Dynamic<'ctx> {
         let mut locals: Vec<ast::Dynamic<'ctx>> = self.init_locals();
@@ -279,8 +311,6 @@ impl<'ctx> Converter<'ctx> {
                 Instruction::TeeLocal(idx) => {
                     let val = stack.pop();
                     stack.push(val.clone());
-                    // stack.push(val.clone());
-                    // val = stack.pop();
                     locals[*idx as usize] = val;
                 }
                 Instruction::I32Const(c) => {
@@ -436,6 +466,86 @@ impl<'ctx> Z3Solver<'ctx> {
         }
     }
 
+
+
+    pub fn test_synthesis (&self, instrs: &[Instruction]) -> HashMap<usize, i64> {
+// VerifyResult {
+
+        let mut locals: Vec<ast::Dynamic<'ctx>> = self.converter.init_locals();
+/*
+        let mut stack = Vec::new();
+        //let mut holes = Vec::new();
+        let mut ctr = 0;
+
+        for instr in instrs {
+            match instr {
+                Instruction::I32Const(c) => {
+//                    let c = z3::ast::Int::new_const(&self.ctx, &format!("c{}", ctr));
+                    ctr+=1;
+ //                   stack.push(c)
+//                    stack.push(ast::BV::from_i64(&self.ctx, *c as i64, 32));
+                    //holes.push(
+                },
+                Instruction::GetLocal(idx) =>
+                    holes.put(&c, "c");
+                    stack.push(locals[*idx as usize].as_bv().expect("Local is not BV")),
+                
+                Instruction::I32Add => {
+                    let lhs = stack.pop().expect("No more values on stack");
+                    let rhs = stack.pop().expect("No more values on stack");
+                    stack.push(lhs.bvadd(&rhs))
+                }
+                _ =>(), // panic!("Instruction not supported"),
+            };
+        }*/
+//        assert!(stack.len() <= 1);      
+//        let map = HashMap::new(); 
+
+        let c1 = z3::ast::Int::new_const(&self.ctx, "c1");
+        let c2 = z3::ast::Int::new_const(&self.ctx, "c2");
+        let holes: Vec<(&z3::ast::Int, usize)> = vec![(&c1, 0), (&c2, 1)];
+        let query = c1.to_ast(32).bvadd(&c2.to_ast(32)).bvand(&locals[0].as_bv().unwrap());
+
+
+
+
+
+
+        let solver = Solver::new(&self.ctx);
+        let forall = z3::ast::forall_const(
+            &self.ctx,
+            &[&locals[0].clone()], // Put in forall variables (locals?)
+            &[],
+            &self.spec_f._eq(&query.into()).not().into())
+        .as_bool()
+        .unwrap();
+        solver.assert(&forall);
+       
+        // Want to do: query = prog.and(not_spec)
+        // Then if UNSAT, it is correct
+//        let query = formula.as_bool().and(&self.spec_f.as_bool.not());
+//        solver.assert(query);
+//        solver.assert(&self.spec_f._eq(&query.into()).not());
+//        let mut vec = Vec::new(); 
+        let mut map = HashMap::new();
+        match solver.check() {
+            z3::SatResult::Sat => {
+                let model = solver.get_model();
+                model.eval(&c1).unwrap().as_i64().unwrap();
+                for (c, idx) in holes.iter() {
+
+                    let value = model.eval(*c)
+                        .unwrap()
+                        .as_i64()
+                        .unwrap();
+                    map.insert(*idx, value);
+                }
+            },
+            _ => (),
+//            _ => VerifyResult::Verified,
+        };
+    map
+    }
     pub fn verify(&self, instrs: &[Instruction]) -> VerifyResult {
         let candidate_f = self.converter.convert(instrs);
         let solver = Solver::new(&self.ctx);
