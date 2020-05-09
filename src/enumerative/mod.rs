@@ -22,6 +22,7 @@ pub fn search(
 
     // Enumerates programs of length i to max_length
     for i in 1..=max_length {
+        println!("Current length: {}", i);
         // Creates a multi cartesian product of iterators over the whitelisted instructions.
         // For example, if we're given [1, 2, 3], then there are 9 length 2 candidates as following
         // [1, 1], [1, 2], [1, 3].
@@ -39,24 +40,44 @@ pub fn search(
                 return None;
             }
 
-
             if let wasm::StackState::Valid = wasm::check_stack_state(&instr_whitelist, &candidate) {
                 // Explicitly copy the instruction list to keep track of them.
                 let instrs: Vec<parity_wasm::elements::Instruction> =
                     candidate.iter().map(|&item| item.clone()).collect();
-
 
                 // Get test outputs returns the output values that are different from the spec, so
                 // if this vector is empty, all test cases pass.
                 let test_outputs =
                     interpreter.get_test_outputs(spec.get_binary_with_instrs(&instrs));
                 if test_outputs.is_empty() {
-
+                    println!("test_outputs empty");
                     match z3_solver.verify(&instrs) {
                         solver::VerifyResult::Verified => {
                             return Some(wasm::Candidate::from_instrs(instrs));
                         }
+                        
                         solver::VerifyResult::CounterExample(values) => {
+                            
+                            println!("Synthesizing ... ");
+                            let tmp_instrs = z3_solver.synthesize(&instrs);
+                            println!("{:?}", instrs);
+                            let mut new_instrs = instrs.clone();
+                            for i in 0..tmp_instrs.len() {
+                                new_instrs[i as usize] = tmp_instrs[i as usize].clone(); 
+                            }
+                            println!("New instrs: {:?}", new_instrs);
+                            match z3_solver.verify(&new_instrs) {
+        
+                                solver::VerifyResult::Verified => {
+                                    println!("Verified");
+                                    return Some(wasm::Candidate::from_instrs(new_instrs))
+                                },
+
+
+                                _ => println!("Not verified"),
+                            };
+                            
+                             
                             interpreter.add_test_case(values);
                             seen_candidates.push(instrs);
                             seen_states = seen_candidates
@@ -67,15 +88,11 @@ pub fn search(
                                     )
                                 })
                                 .collect();
+
                         }
                     }
                 } else {
-                    let map = z3_solver.test_synthesis(&instrs);
-                    if map.len() > 0 {
-                        println!("{:?}", instrs);
-                        println!("Map: {:?}", map);
-                    }
-
+                    println!("Else");
                     match seen_states.iter().position(|s| *s == test_outputs) {
                         Some(idx) => {
                             if instrs.len() < seen_candidates[idx].len() {

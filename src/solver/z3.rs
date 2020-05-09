@@ -181,25 +181,26 @@ impl<'ctx> Converter<'ctx> {
                           synthesize: bool) -> (ast::Dynamic<'ctx>, Vec<(usize, z3::ast::Int<'ctx>)>) {
         let mut locals: Vec<ast::Dynamic<'ctx>> = self.init_locals();
         let mut stack: ValueStack<'ctx> = ValueStack::new();
-        let mut idx: usize = 0;
+        let mut hole_idx: usize = 0;
 
         let mut init_holes = Vec::new();
         for i in 0..instrs.len() {
             init_holes.push(z3::ast::Int::new_const(&self.ctx,
                 format!("c{}", i).as_str() ));
         }
-        /*
         let local_type = z3::DatatypeBuilder::new(&self.ctx)
-            .variant("i32", &[("value", &z3::Sort::int(&self.ctx))])
-            .variant("i64", &[("value", &z3::Sort::int(&self.ctx))])
-            .variant("f32", &[("value", &z3::Sort::int(&self.ctx))])
-            .variant("f64", &[("value", &z3::Sort::int(&self.ctx))])
+            .variant("BitVec", &[("value", &z3::Sort::bitvector(&self.ctx, 32))])
             .finish("LocalType");
-
-         let z3_locals = z3::ast::Array::fresh_const(&self.ctx,
+         let mut z3_locals = z3::ast::Array::new_const(&self.ctx,
             "locals",
             &z3::Sort::int(&self.ctx), 
-            &local_type.sort); */
+            &local_type.sort);
+        for i in 0..locals.len() {
+            z3_locals = z3_locals.store(&ast::Int::from_i64(&self.ctx, i as i64).into(),
+                            &local_type.variants[0]
+                                .constructor    
+                                .apply(&[&locals[i]]));
+        } 
 
 
         let mut new_holes = Vec::new();
@@ -294,20 +295,25 @@ impl<'ctx> Converter<'ctx> {
                 }
                 // local variable ops
                 Instruction::GetLocal(idx) => {
-                    /*
                     if synthesize {
-                        let idx_hole: &z3::ast::Int<'ctx> = &init_holes[holes_idx];
-                        new_holes.push(holes_idx, idx_hole.clone());
-                        let val = z3_locals.select(&ast::Dynamic::from_ast(idx_hole));
-                        stack.push(val);
+                        let idx_hole: &z3::ast::Int<'ctx> = &init_holes[hole_idx];
+                        let z3_val = z3_locals.select(&ast::Dynamic::from_ast(idx_hole)).as_bv();
+                        match z3_val {
+                            Some(x) => {
+                                // This is not executing
+                                new_holes.push((hole_idx, idx_hole.clone()));
+                                stack.push(x)
+                            },
+                            _ => {
+                                let val = &locals[*idx as usize];
+                                stack.push(val.clone())
+                            },
+                        }
                     }
                     else {
-
+                        let val = &locals[*idx as usize];
+                        stack.push(val.clone());
                     }
-
-                    */
-                    let val = &locals[*idx as usize];
-                    stack.push(val.clone());
                 }
                 Instruction::SetLocal(idx) => {
                     let val = stack.pop();
@@ -320,8 +326,8 @@ impl<'ctx> Converter<'ctx> {
                 }
                 Instruction::I32Const(c) => {
                     if synthesize {
-                        let val = &init_holes[idx];
-                        new_holes.push((idx, val.clone()));
+                        let val = &init_holes[hole_idx];
+                        new_holes.push((hole_idx, val.clone()));
                         stack.push(val.to_ast(32));
                     }
                     else {
@@ -444,10 +450,8 @@ impl<'ctx> Converter<'ctx> {
                     panic!("{} not supported", instr);
                 }
             }
-
-            idx +=1;
+            hole_idx +=1;
         }
-
         match self.func_type.return_type() {
             Some(_) => (stack.pop(), new_holes),
             None => panic!("Doens't support void functions."),
@@ -480,9 +484,7 @@ impl<'ctx> Z3Solver<'ctx> {
         }
     }
 
-
-
-    pub fn test_synthesis (&self, instrs: &[Instruction]) -> HashMap<usize, i64> {
+    pub fn synthesize (&self, instrs: &[Instruction]) -> Vec<Instruction> {
 
         let locals: Vec<ast::Dynamic<'ctx>> = self.converter.init_locals();
 
@@ -490,15 +492,15 @@ impl<'ctx> Z3Solver<'ctx> {
         
         let mut tmp_locals = Vec::<&ast::Dynamic<'ctx>>::with_capacity(locals.len());
 
+        let mut new_instrs = Vec::<Instruction>::with_capacity(instrs.len());
         for i in 0..locals.len() {
             tmp_locals.push( &locals[i]);
         }
-
         for i in 0..instrs.len() {
+            new_instrs[i] = instrs[i].clone();
             init_holes.push(z3::ast::Int::new_const(&self.ctx,
                 format!("c{}", i).as_str()));
         }
-
 
         let solver = Solver::new(&self.ctx);
         let (candidate_f, hls) = self.converter.convert(instrs, true);
@@ -511,8 +513,8 @@ impl<'ctx> Z3Solver<'ctx> {
         .unwrap();
 
         solver.assert(&forall);
-       
-        let mut map = HashMap::new();
+
+//        let mut map = HashMap::new();
         match solver.check() {
             z3::SatResult::Sat => {
                 let model = solver.get_model();
@@ -522,12 +524,13 @@ impl<'ctx> Z3Solver<'ctx> {
                             Some(x) => x.as_i64().unwrap(),
                             _ => -1,
                         };
-                    map.insert(*i, value);
+//                    map.insert(i, value);
+                    new_instrs[*i] = Instruction::I32Const(value as i32);
                 }
             },
             _ => (),
         };
-    map
+    new_instrs.clone()
     }
     pub fn verify(&self, instrs: &[Instruction]) -> VerifyResult {
         let candidate_f = self.converter.convert(instrs, false).0;
@@ -566,8 +569,8 @@ impl<'ctx> Z3Solver<'ctx> {
                         unexpected => panic!("{} not supported", unexpected),
                     }
                 }
-                println!("Spec: {:?}", self.spec_f);
-                println!("Cand: {:?}", candidate_f);
+//                println!("Spec: {:?}", self.spec_f);
+//                println!("Cand: {:?}", candidate_f);
 
                 VerifyResult::CounterExample(values)
             }
