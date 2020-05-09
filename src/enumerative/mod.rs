@@ -39,15 +39,19 @@ pub fn search(
                 return None;
             }
 
+
             if let wasm::StackState::Valid = wasm::check_stack_state(&instr_whitelist, &candidate) {
                 // Explicitly copy the instruction list to keep track of them.
                 let instrs: Vec<parity_wasm::elements::Instruction> =
                     candidate.iter().map(|&item| item.clone()).collect();
+
+
                 // Get test outputs returns the output values that are different from the spec, so
                 // if this vector is empty, all test cases pass.
                 let test_outputs =
                     interpreter.get_test_outputs(spec.get_binary_with_instrs(&instrs));
                 if test_outputs.is_empty() {
+
                     match z3_solver.verify(&instrs) {
                         solver::VerifyResult::Verified => {
                             return Some(wasm::Candidate::from_instrs(instrs));
@@ -66,6 +70,12 @@ pub fn search(
                         }
                     }
                 } else {
+                    let map = z3_solver.test_synthesis(&instrs);
+                    if map.len() > 0 {
+                        println!("{:?}", instrs);
+                        println!("Map: {:?}", map);
+                    }
+
                     match seen_states.iter().position(|s| *s == test_outputs) {
                         Some(idx) => {
                             if instrs.len() < seen_candidates[idx].len() {
