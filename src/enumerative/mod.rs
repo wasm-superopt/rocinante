@@ -9,6 +9,19 @@ pub fn search(
     interpreter: &mut dyn exec::Interpreter,
     spec: &mut wasm::Spec,
 ) -> Option<wasm::Candidate> {
+    let contains_consts = |instrs: &[parity_wasm::elements::Instruction] | -> bool {
+        for instr in instrs {
+            match instr {
+//                parity_wasm::elements::Instruction::I32Const(_) => return true,
+                parity_wasm::elements::Instruction::GetLocal(_) => return true,
+//                parity_wasm::elements::Instruction::SetLocal(_) => return true,
+ //               parity_wasm::elements::Instruction::TeeLocal(_) => return true,
+                _ => false,
+
+            };
+        }
+        false
+    };
     let instr_whitelist =
         wasm::Whitelist::new(spec.num_params(), spec.num_locals(), &options.constants);
 
@@ -19,10 +32,10 @@ pub fn search(
     // seen candidates.
     let mut seen_candidates: Vec<Vec<parity_wasm::elements::Instruction>> = Vec::new();
     let mut seen_states: Vec<_> = Vec::new();
-
+//    let mut seen_skeletons = Vec::new();
     // Enumerates programs of length i to max_length
     for i in 1..=max_length {
-        println!("Current length: {}", i);
+//        println!("Current length: {}", i);
         // Creates a multi cartesian product of iterators over the whitelisted instructions.
         // For example, if we're given [1, 2, 3], then there are 9 length 2 candidates as following
         // [1, 1], [1, 2], [1, 3].
@@ -33,7 +46,6 @@ pub fn search(
         let iter = (0..i)
             .map(|_| instr_whitelist.iter())
             .multi_cartesian_product();
-
         for candidate in iter {
             if rx.try_recv().is_ok() {
                 println!("Enumerative search timed out.");
@@ -49,8 +61,20 @@ pub fn search(
                 // if this vector is empty, all test cases pass.
                 let test_outputs =
                     interpreter.get_test_outputs(spec.get_binary_with_instrs(&instrs));
+                if instrs.len() >= 5 && contains_consts(&instrs) {    
+                match synthesize(z3_solver, &instrs) {
+                    Some(v) => {
+                        println!("Verified");
+
+                        return Some(v) 
+                    },
+                    _ => {
+                        println!("Unverified. Continuing\n")
+                    },
+                };
+                }
+
                 if test_outputs.is_empty() {
-                    println!("test_outputs empty");
                     match z3_solver.verify(&instrs) {
                         solver::VerifyResult::Verified => {
                             return Some(wasm::Candidate::from_instrs(instrs));
@@ -58,41 +82,24 @@ pub fn search(
                         
                         solver::VerifyResult::CounterExample(values) => {
                             
-                            println!("Synthesizing ... ");
-                            let tmp_instrs = z3_solver.synthesize(&instrs);
-                            println!("{:?}", instrs);
-                            let mut new_instrs = instrs.clone();
-                            for i in 0..tmp_instrs.len() {
-                                new_instrs[i as usize] = tmp_instrs[i as usize].clone(); 
-                            }
-                            println!("New instrs: {:?}", new_instrs);
-                            match z3_solver.verify(&new_instrs) {
-        
-                                solver::VerifyResult::Verified => {
-                                    println!("Verified");
-                                    return Some(wasm::Candidate::from_instrs(new_instrs))
+                            match synthesize(z3_solver, &instrs) {
+                                Some(c) => return Some(c),
+                                _ => {
+                                    interpreter.add_test_case(values);
+                                    seen_candidates.push(instrs);
+                                    seen_states = seen_candidates
+                                        .iter()
+                                        .map(|seen_candidate| {
+                                            interpreter.get_test_outputs(
+                                                spec.get_binary_with_instrs(seen_candidate),
+                                            )
+                                        })
+                                        .collect();
                                 },
-
-
-                                _ => println!("Not verified"),
-                            };
-                            
-                             
-                            interpreter.add_test_case(values);
-                            seen_candidates.push(instrs);
-                            seen_states = seen_candidates
-                                .iter()
-                                .map(|seen_candidate| {
-                                    interpreter.get_test_outputs(
-                                        spec.get_binary_with_instrs(seen_candidate),
-                                    )
-                                })
-                                .collect();
-
+                            }                            
                         }
                     }
                 } else {
-                    println!("Else");
                     match seen_states.iter().position(|s| *s == test_outputs) {
                         Some(idx) => {
                             if instrs.len() < seen_candidates[idx].len() {
@@ -110,4 +117,29 @@ pub fn search(
     }
 
     None
+}
+fn synthesize (z3_solver: &solver::Z3Solver, 
+               instrs: &Vec<parity_wasm::elements::Instruction>) -> Option<wasm::Candidate> {
+
+     let tmp_instrs = z3_solver.synthesize(instrs);
+     println!("{:?}", instrs);
+     let mut new_instrs = instrs.clone();
+     for i in 0..tmp_instrs.len() {
+         new_instrs[i as usize] = tmp_instrs[i as usize].clone(); 
+     }
+     println!("New instrs: {:?}", new_instrs);
+     match z3_solver.verify(&new_instrs) {
+     
+         solver::VerifyResult::Verified => {
+             Some(wasm::Candidate::from_instrs(tmp_instrs))
+         },
+
+
+         _ => {
+//           seen_skeletons.push(tmp_instrs)
+             None
+         }
+     }
+     
+
 }

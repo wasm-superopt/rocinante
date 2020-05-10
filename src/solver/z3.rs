@@ -177,8 +177,248 @@ impl<'ctx> Converter<'ctx> {
         locals
     }
     // TODO(taegyunkim): Add test for each case.
-    pub fn convert(&self, instrs: &[Instruction],
-                          synthesize: bool) -> (ast::Dynamic<'ctx>, Vec<(usize, z3::ast::Int<'ctx>)>) {
+    pub fn convert(&self, instrs: &[Instruction]) -> ast::Dynamic<'ctx> {
+        let mut locals: Vec<ast::Dynamic<'ctx>> = self.init_locals();
+        let mut stack: ValueStack<'ctx> = ValueStack::new();
+
+        for instr in instrs {
+            match instr {
+
+                // local variable ops
+                Instruction::GetLocal(idx) => {
+                    let val = &locals[*idx as usize];
+                    stack.push(val.clone());
+                }
+                Instruction::SetLocal(idx) => {
+                    let val = stack.pop();
+                    locals[*idx as usize] = val;
+                }
+                Instruction::TeeLocal(idx) => {
+                    let val = stack.pop();
+                    stack.push(val.clone());
+                    locals[*idx as usize] = val;
+                }
+                Instruction::I32Const(c) => {
+                    let val = ast::BV::from_i64(&self.ctx, *c as i64, 32);
+                    stack.push(val);
+                }
+                _ => self.convert_op (&mut stack, instr),
+            }
+        }
+        match self.func_type.return_type() {
+            Some(_) => stack.pop(),
+            None => panic!("Doens't support void functions."),
+        }
+    }
+
+fn convert_op (&self, stack: &mut ValueStack<'ctx>, instr: &Instruction) {
+    match instr {
+        // I32 binops
+        Instruction::I32Add => {
+            let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
+            let res = lhs.bvadd(&rhs);
+            stack.push(res);
+        }
+        Instruction::I32Sub => {
+            let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
+            let res = lhs.bvsub(&rhs);
+            stack.push(res);
+        }
+        Instruction::I32Mul => {
+            let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
+            let res = lhs.bvmul(&rhs);
+            stack.push(res);
+        }
+        Instruction::I32DivS => {
+            let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
+            let res = lhs.bvsdiv(&rhs);
+            stack.push(res);
+        }
+        Instruction::I32DivU => {
+            let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
+            let res = lhs.bvudiv(&rhs);
+            stack.push(res);
+        }
+        Instruction::I32RemS => {
+            let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
+            let res = lhs.bvsrem(&rhs);
+            stack.push(res);
+        }
+        
+        Instruction::I32RemU => {
+            let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
+            let res = lhs.bvurem(&rhs);
+            stack.push(res);
+        }
+        Instruction::I32And => {
+            let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
+            let res = lhs.bvand(&rhs);
+            stack.push(res);
+        }
+        Instruction::I32Or => {
+            let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
+            let res = lhs.bvor(&rhs);
+            stack.push(res);
+        }
+        Instruction::I32Xor => {
+            let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
+            let res = lhs.bvxor(&rhs);
+            stack.push(res);
+        }
+        Instruction::I32Shl => {
+            let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
+            // NOTE(taegyunkim): The WASM spec tests performs shifts by modulo 32, ditto
+            // all shift and rotate instructions.
+            let shift_cnt = rhs.bvand(&ast::BV::from_i64(&self.ctx, 31, 32));
+            let res = lhs.bvshl(&shift_cnt);
+            stack.push(res);
+        }
+        Instruction::I32ShrS => {
+            // NOTE(taegyunkim): sign-replicating (arithmetic) shift right.
+            let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
+            let shift_cnt = rhs.bvand(&ast::BV::from_i64(&self.ctx, 31, 32));
+            let res = lhs.bvashr(&shift_cnt);
+            stack.push(res);
+        }
+        Instruction::I32ShrU => {
+            // NOTE(taegyunkim): zero-replicating (logical) shift right.
+            let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
+            let shift_cnt = rhs.bvand(&ast::BV::from_i64(&self.ctx, 31, 32));
+            let res = lhs.bvlshr(&shift_cnt);
+            stack.push(res);
+        }
+        Instruction::I32Rotl => {
+            let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
+            let rotate_cnt = rhs.bvand(&ast::BV::from_i64(&self.ctx, 31, 32));
+            let res = lhs.bvrotl(&rotate_cnt);
+            stack.push(res);
+        }
+        Instruction::I32Rotr => {
+            let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
+            let rotate_cnt = rhs.bvand(&ast::BV::from_i64(&self.ctx, 31, 32));
+            let res = lhs.bvrotr(&rotate_cnt);
+            stack.push(res);
+        }
+
+        // I32 relops
+        Instruction::I32Eq => {
+            let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
+            let res = lhs._eq(&rhs);
+            stack.push(res.ite(
+                &ast::BV::from_i64(&self.ctx, 1, 32),
+                &ast::BV::from_i64(&self.ctx, 0, 32),
+            ));
+        }
+        Instruction::I32Ne => {
+            let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
+            let res = lhs._eq(&rhs);
+            stack.push(res.ite(
+                &ast::BV::from_i64(&self.ctx, 0, 32),
+                &ast::BV::from_i64(&self.ctx, 1, 32),
+            ));
+        }
+        Instruction::I32LtS => {
+            let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
+            let res = lhs.bvslt(&rhs);
+            stack.push(res.ite(
+                &ast::BV::from_i64(&self.ctx, 1, 32),
+                &ast::BV::from_i64(&self.ctx, 0, 32),
+            ));
+        }
+        Instruction::I32LtU => {
+            let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
+            let res = lhs.bvult(&rhs);
+            stack.push(res.ite(
+                &ast::BV::from_i64(&self.ctx, 1, 32),
+                &ast::BV::from_i64(&self.ctx, 0, 32),
+            ));
+        }
+        Instruction::I32GtS => {
+            let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
+            let res = lhs.bvsgt(&rhs);
+            stack.push(res.ite(
+                &ast::BV::from_i64(&self.ctx, 1, 32),
+                &ast::BV::from_i64(&self.ctx, 0, 32),
+            ));
+        }
+        Instruction::I32GtU => {
+            let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
+            let res = lhs.bvugt(&rhs);
+            stack.push(res.ite(
+                &ast::BV::from_i64(&self.ctx, 1, 32),
+                &ast::BV::from_i64(&self.ctx, 0, 32),
+            ));
+        }
+        Instruction::I32LeS => {
+            let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
+            let res = lhs.bvsle(&rhs);
+            stack.push(res.ite(
+                &ast::BV::from_i64(&self.ctx, 1, 32),
+                &ast::BV::from_i64(&self.ctx, 0, 32),
+            ));
+        }
+        Instruction::I32LeU => {
+            let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
+            let res: ast::Bool<'ctx> = lhs.bvule(&rhs);
+            stack.push(res.ite(
+                &ast::BV::from_i64(&self.ctx, 1, 32),
+                &ast::BV::from_i64(&self.ctx, 0, 32),
+            ));
+        }
+        Instruction::I32GeS => {
+            let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
+            let res = lhs.bvsge(&rhs);
+            stack.push(res.ite(
+                &ast::BV::from_i64(&self.ctx, 1, 32),
+                &ast::BV::from_i64(&self.ctx, 0, 32),
+            ));
+        }
+        Instruction::I32GeU => {
+            let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
+            let res = lhs.bvuge(&rhs);
+            stack.push(res.ite(
+                &ast::BV::from_i64(&self.ctx, 1, 32),
+                &ast::BV::from_i64(&self.ctx, 0, 32),
+            ));
+        }
+        // i32 testop
+        Instruction::I32Eqz => {
+            let val = stack.pop_as::<ast::BV<'ctx>>();
+            let res = val._eq(&ast::BV::from_i64(&self.ctx, 0, 32));
+            stack.push(res.ite(
+                &ast::BV::from_i64(&self.ctx, 1, 32),
+                &ast::BV::from_i64(&self.ctx, 0, 32),
+            ));
+        }
+        // i32 unops
+        Instruction::I32Clz => {
+            let val = stack.pop_as::<ast::BV<'ctx>>();
+            stack.push(clz(&self.ctx, &val));
+        }
+        Instruction::I32Ctz => {
+            let val = stack.pop_as::<ast::BV<'ctx>>();
+            stack.push(ctz(&self.ctx, &val));
+        }
+        Instruction::I32Popcnt => {
+            let val = stack.pop_as::<ast::BV<'ctx>>();
+            stack.push(popcnt(&self.ctx, &val));
+        }
+        // control instructions
+        Instruction::Nop => {
+            // Do nothing
+        }
+        Instruction::End => {
+            // NOTE: no need to handle this for programs without loops
+            // and control structures.
+        }
+        _ => {
+            panic!("{} not supported", instr);
+        }
+    };
+
+}
+pub fn convert_for_synthesis(&self, instrs: &[Instruction]) -> (ast::Dynamic<'ctx>, Vec<(usize, z3::ast::Int<'ctx>)>) {
+
         let mut locals: Vec<ast::Dynamic<'ctx>> = self.init_locals();
         let mut stack: ValueStack<'ctx> = ValueStack::new();
         let mut hole_idx: usize = 0;
@@ -188,131 +428,33 @@ impl<'ctx> Converter<'ctx> {
             init_holes.push(z3::ast::Int::new_const(&self.ctx,
                 format!("c{}", i).as_str() ));
         }
-        let local_type = z3::DatatypeBuilder::new(&self.ctx)
-            .variant("BitVec", &[("value", &z3::Sort::bitvector(&self.ctx, 32))])
-            .finish("LocalType");
          let mut z3_locals = z3::ast::Array::new_const(&self.ctx,
             "locals",
             &z3::Sort::int(&self.ctx), 
-            &local_type.sort);
+            &z3::Sort::bitvector(&self.ctx,32)); 
         for i in 0..locals.len() {
             z3_locals = z3_locals.store(&ast::Int::from_i64(&self.ctx, i as i64).into(),
-                            &local_type.variants[0]
-                                .constructor    
-                                .apply(&[&locals[i]]));
+                        &locals[i].clone().into());
         } 
-
-
         let mut new_holes = Vec::new();
 
         for instr in instrs {
             match instr {
-                // I32 binops
-                Instruction::I32Add => {
-                    let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
-                    let res = lhs.bvadd(&rhs);
-                    stack.push(res);
-                }
-                Instruction::I32Sub => {
-                    let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
-                    let res = lhs.bvsub(&rhs);
-                    stack.push(res);
-                }
-                Instruction::I32Mul => {
-                    let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
-                    let res = lhs.bvmul(&rhs);
-                    stack.push(res);
-                }
-                Instruction::I32DivS => {
-                    let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
-                    let res = lhs.bvsdiv(&rhs);
-                    stack.push(res);
-                }
-                Instruction::I32DivU => {
-                    let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
-                    let res = lhs.bvudiv(&rhs);
-                    stack.push(res);
-                }
-                Instruction::I32RemS => {
-                    let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
-                    let res = lhs.bvsrem(&rhs);
-                    stack.push(res);
-                }
-                
-                Instruction::I32RemU => {
-                    let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
-                    let res = lhs.bvurem(&rhs);
-                    stack.push(res);
-                }
-                Instruction::I32And => {
-                    let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
-                    let res = lhs.bvand(&rhs);
-                    stack.push(res);
-                }
-                Instruction::I32Or => {
-                    let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
-                    let res = lhs.bvor(&rhs);
-                    stack.push(res);
-                }
-                Instruction::I32Xor => {
-                    let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
-                    let res = lhs.bvxor(&rhs);
-                    stack.push(res);
-                }
-                Instruction::I32Shl => {
-                    let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
-                    // NOTE(taegyunkim): The WASM spec tests performs shifts by modulo 32, ditto
-                    // all shift and rotate instructions.
-                    let shift_cnt = rhs.bvand(&ast::BV::from_i64(&self.ctx, 31, 32));
-                    let res = lhs.bvshl(&shift_cnt);
-                    stack.push(res);
-                }
-                Instruction::I32ShrS => {
-                    // NOTE(taegyunkim): sign-replicating (arithmetic) shift right.
-                    let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
-                    let shift_cnt = rhs.bvand(&ast::BV::from_i64(&self.ctx, 31, 32));
-                    let res = lhs.bvashr(&shift_cnt);
-                    stack.push(res);
-                }
-                Instruction::I32ShrU => {
-                    // NOTE(taegyunkim): zero-replicating (logical) shift right.
-                    let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
-                    let shift_cnt = rhs.bvand(&ast::BV::from_i64(&self.ctx, 31, 32));
-                    let res = lhs.bvlshr(&shift_cnt);
-                    stack.push(res);
-                }
-                Instruction::I32Rotl => {
-                    let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
-                    let rotate_cnt = rhs.bvand(&ast::BV::from_i64(&self.ctx, 31, 32));
-                    let res = lhs.bvrotl(&rotate_cnt);
-                    stack.push(res);
-                }
-                Instruction::I32Rotr => {
-                    let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
-                    let rotate_cnt = rhs.bvand(&ast::BV::from_i64(&self.ctx, 31, 32));
-                    let res = lhs.bvrotr(&rotate_cnt);
-                    stack.push(res);
-                }
                 // local variable ops
                 Instruction::GetLocal(idx) => {
-                    if synthesize {
-                        let idx_hole: &z3::ast::Int<'ctx> = &init_holes[hole_idx];
-                        let z3_val = z3_locals.select(&ast::Dynamic::from_ast(idx_hole)).as_bv();
-                        match z3_val {
-                            Some(x) => {
-                                // This is not executing
-                                new_holes.push((hole_idx, idx_hole.clone()));
-                                stack.push(x)
-                            },
-                            _ => {
-                                let val = &locals[*idx as usize];
-                                stack.push(val.clone())
-                            },
-                        }
-                    }
-                    else {
-                        let val = &locals[*idx as usize];
-                        stack.push(val.clone());
+                    let idx_hole: &z3::ast::Int<'ctx> = &init_holes[hole_idx];
+                    let z3_val = z3_locals.select(&ast::Dynamic::from_ast(idx_hole));
+                    println!("z3_val: {:?}", z3_val);
+                    match z3_val.as_bv() {
+                        Some(x) => {
+                            // This is not executing, fix
+                            new_holes.push((hole_idx, idx_hole.clone()));
+                            stack.push(x)
+                        },
+                        _ => {
+                            let val = &locals[*idx as usize];
+                            stack.push(val.clone())
+                        },
                     }
                 }
                 Instruction::SetLocal(idx) => {
@@ -325,129 +467,12 @@ impl<'ctx> Converter<'ctx> {
                     locals[*idx as usize] = val;
                 }
                 Instruction::I32Const(c) => {
-                    if synthesize {
-                        let val = &init_holes[hole_idx];
-                        new_holes.push((hole_idx, val.clone()));
-                        stack.push(val.to_ast(32));
-                    }
-                    else {
-                        let val = ast::BV::from_i64(&self.ctx, *c as i64, 32);
-                        stack.push(val);
-                    }
-                }
-                // I32 relops
-                Instruction::I32Eq => {
-                    let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
-                    let res = lhs._eq(&rhs);
-                    stack.push(res.ite(
-                        &ast::BV::from_i64(&self.ctx, 1, 32),
-                        &ast::BV::from_i64(&self.ctx, 0, 32),
-                    ));
-                }
-                Instruction::I32Ne => {
-                    let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
-                    let res = lhs._eq(&rhs);
-                    stack.push(res.ite(
-                        &ast::BV::from_i64(&self.ctx, 0, 32),
-                        &ast::BV::from_i64(&self.ctx, 1, 32),
-                    ));
-                }
-                Instruction::I32LtS => {
-                    let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
-                    let res = lhs.bvslt(&rhs);
-                    stack.push(res.ite(
-                        &ast::BV::from_i64(&self.ctx, 1, 32),
-                        &ast::BV::from_i64(&self.ctx, 0, 32),
-                    ));
-                }
-                Instruction::I32LtU => {
-                    let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
-                    let res = lhs.bvult(&rhs);
-                    stack.push(res.ite(
-                        &ast::BV::from_i64(&self.ctx, 1, 32),
-                        &ast::BV::from_i64(&self.ctx, 0, 32),
-                    ));
-                }
-                Instruction::I32GtS => {
-                    let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
-                    let res = lhs.bvsgt(&rhs);
-                    stack.push(res.ite(
-                        &ast::BV::from_i64(&self.ctx, 1, 32),
-                        &ast::BV::from_i64(&self.ctx, 0, 32),
-                    ));
-                }
-                Instruction::I32GtU => {
-                    let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
-                    let res = lhs.bvugt(&rhs);
-                    stack.push(res.ite(
-                        &ast::BV::from_i64(&self.ctx, 1, 32),
-                        &ast::BV::from_i64(&self.ctx, 0, 32),
-                    ));
-                }
-                Instruction::I32LeS => {
-                    let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
-                    let res = lhs.bvsle(&rhs);
-                    stack.push(res.ite(
-                        &ast::BV::from_i64(&self.ctx, 1, 32),
-                        &ast::BV::from_i64(&self.ctx, 0, 32),
-                    ));
-                }
-                Instruction::I32LeU => {
-                    let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
-                    let res: ast::Bool<'ctx> = lhs.bvule(&rhs);
-                    stack.push(res.ite(
-                        &ast::BV::from_i64(&self.ctx, 1, 32),
-                        &ast::BV::from_i64(&self.ctx, 0, 32),
-                    ));
-                }
-                Instruction::I32GeS => {
-                    let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
-                    let res = lhs.bvsge(&rhs);
-                    stack.push(res.ite(
-                        &ast::BV::from_i64(&self.ctx, 1, 32),
-                        &ast::BV::from_i64(&self.ctx, 0, 32),
-                    ));
-                }
-                Instruction::I32GeU => {
-                    let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
-                    let res = lhs.bvuge(&rhs);
-                    stack.push(res.ite(
-                        &ast::BV::from_i64(&self.ctx, 1, 32),
-                        &ast::BV::from_i64(&self.ctx, 0, 32),
-                    ));
-                }
-                // i32 testop
-                Instruction::I32Eqz => {
-                    let val = stack.pop_as::<ast::BV<'ctx>>();
-                    let res = val._eq(&ast::BV::from_i64(&self.ctx, 0, 32));
-                    stack.push(res.ite(
-                        &ast::BV::from_i64(&self.ctx, 1, 32),
-                        &ast::BV::from_i64(&self.ctx, 0, 32),
-                    ));
-                }
-                // i32 unops
-                Instruction::I32Clz => {
-                    let val = stack.pop_as::<ast::BV<'ctx>>();
-                    stack.push(clz(&self.ctx, &val));
-                }
-                Instruction::I32Ctz => {
-                    let val = stack.pop_as::<ast::BV<'ctx>>();
-                    stack.push(ctz(&self.ctx, &val));
-                }
-                Instruction::I32Popcnt => {
-                    let val = stack.pop_as::<ast::BV<'ctx>>();
-                    stack.push(popcnt(&self.ctx, &val));
-                }
-                // control instructions
-                Instruction::Nop => {
-                    // Do nothing
-                }
-                Instruction::End => {
-                    // NOTE: no need to handle this for programs without loops
-                    // and control structures.
+                    let val = &init_holes[hole_idx];
+                    new_holes.push((hole_idx, val.clone()));
+                    stack.push(val.to_ast(32));
                 }
                 _ => {
-                    panic!("{} not supported", instr);
+                    self.convert_op(&mut stack, instr);
                 }
             }
             hole_idx +=1;
@@ -458,6 +483,7 @@ impl<'ctx> Converter<'ctx> {
         }
     }
 }
+
 
 #[derive(PartialEq, Debug)]
 pub enum VerifyResult {
@@ -476,7 +502,7 @@ pub struct Z3Solver<'ctx> {
 impl<'ctx> Z3Solver<'ctx> {
     pub fn new(ctx: &'ctx Context, func_type: &FunctionType, spec: &FuncBody) -> Self {
         let converter = Converter::new(ctx, func_type, spec.locals());
-        let spec_f = converter.convert(spec.code().elements(), false).0;
+        let spec_f = converter.convert(spec.code().elements());
         Self {
             ctx,
             converter,
@@ -487,9 +513,7 @@ impl<'ctx> Z3Solver<'ctx> {
     pub fn synthesize (&self, instrs: &[Instruction]) -> Vec<Instruction> {
 
         let locals: Vec<ast::Dynamic<'ctx>> = self.converter.init_locals();
-
         let mut init_holes = Vec::new();
-        
         let mut tmp_locals = Vec::<&ast::Dynamic<'ctx>>::with_capacity(locals.len());
 
         let mut new_instrs = Vec::<Instruction>::with_capacity(instrs.len());
@@ -497,13 +521,13 @@ impl<'ctx> Z3Solver<'ctx> {
             tmp_locals.push( &locals[i]);
         }
         for i in 0..instrs.len() {
-            new_instrs[i] = instrs[i].clone();
+            new_instrs.push(instrs[i].clone());
             init_holes.push(z3::ast::Int::new_const(&self.ctx,
                 format!("c{}", i).as_str()));
         }
 
         let solver = Solver::new(&self.ctx);
-        let (candidate_f, hls) = self.converter.convert(instrs, true);
+        let (candidate_f, hls) = self.converter.convert_for_synthesis(instrs);
         let forall = z3::ast::forall_const(
             &self.ctx,
             &tmp_locals,
@@ -513,7 +537,6 @@ impl<'ctx> Z3Solver<'ctx> {
         .unwrap();
 
         solver.assert(&forall);
-
 //        let mut map = HashMap::new();
         match solver.check() {
             z3::SatResult::Sat => {
@@ -530,10 +553,10 @@ impl<'ctx> Z3Solver<'ctx> {
             },
             _ => (),
         };
-    new_instrs.clone()
+        new_instrs.clone()
     }
     pub fn verify(&self, instrs: &[Instruction]) -> VerifyResult {
-        let candidate_f = self.converter.convert(instrs, false).0;
+        let candidate_f = self.converter.convert(instrs);
         let solver = Solver::new(&self.ctx);
 
         solver.assert(&self.spec_f._eq(&candidate_f).not());
