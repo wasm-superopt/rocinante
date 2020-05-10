@@ -17,13 +17,12 @@ extern crate wasmprinter;
 extern crate wast;
 extern crate wat;
 
-use crate::bus::{Bus, BusReader};
+use bus::{Bus, BusReader};
 use crate::exec::InterpreterKind;
 use crate::stoke::StokeOpts;
 use parity_wasm::elements::{FuncBody, FunctionType, Instruction, Internal, Module};
 use std::path::PathBuf;
 use std::sync::mpsc::sync_channel;
-use std::sync::{Arc, Mutex};
 use std::thread;
 use structopt::StructOpt;
 
@@ -102,7 +101,6 @@ impl Superoptimizer {
     pub fn run(&self) {
         let module = Module::from_bytes(&self.spec).unwrap();
         let num_workers = num_cpus::get();
-        let candidates = Arc::new(Mutex::new(Vec::with_capacity(num_workers)));
         let (res_sender, res_receiver) = sync_channel(num_workers);
         let mut bus: Bus<()> = Bus::new(num_workers);
         let export_section = module
@@ -119,8 +117,8 @@ impl Superoptimizer {
                     let mut bus_rx = bus.add_rx();
                     let res_sender_i = res_sender.clone();
                     threads.push(thread::spawn({
-                        let candidates_clone = Arc::clone(&candidates);
                         move || {
+                            let mut candidates = Vec::new();
                             let (func_type, func_body) =
                                 parity_wasm_utils::func_by_name(&tmp_module, &func_name);
                             if let Some(mut candidate) = invoke_search(
@@ -133,11 +131,7 @@ impl Superoptimizer {
                                 &mut bus_rx,
                             ) {
                                 candidate.strip_nops();
-                                {
-                                    // New scope to ensure mutex unlocks
-                                    let mut locked_candidates = candidates_clone.lock().unwrap();
-                                    locked_candidates.push(candidate);
-                                }
+                                candidates.push(candidate);
                                 if tmp_options.opti {
                                     if let Some(mut candidate) = invoke_search(
                                         &tmp_spec,
@@ -149,26 +143,24 @@ impl Superoptimizer {
                                         &mut bus_rx,
                                     ) {
                                         candidate.strip_nops();
-                                        let mut locked_candidates =
-                                            candidates_clone.lock().unwrap();
-                                        locked_candidates.push(candidate);
+                                        candidates.push(candidate);
                                     }
                                 }
-                                res_sender_i.send(()).unwrap();
+                                res_sender_i.send(candidates).unwrap();
                             }
                         }
                     }));
                 }
-                res_receiver.recv().unwrap();
+                let candidates = res_receiver.recv().unwrap();
                 bus.broadcast(());
 
                 for t in threads {
                     t.join().unwrap();
                 }
+
+                rank(&candidates);
             }
         }
-        let locked_clone = Arc::clone(&candidates);
-        rank(&locked_clone.lock().unwrap());
     }
 }
 fn invoke_search(
