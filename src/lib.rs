@@ -17,9 +17,9 @@ extern crate wasmprinter;
 extern crate wast;
 extern crate wat;
 
-use bus::{Bus, BusReader};
 use crate::exec::InterpreterKind;
 use crate::stoke::StokeOpts;
+use bus::{Bus, BusReader};
 use parity_wasm::elements::{FuncBody, FunctionType, Instruction, Internal, Module};
 use std::path::PathBuf;
 use std::sync::mpsc::sync_channel;
