@@ -1,3 +1,4 @@
+extern crate bus;
 extern crate chrono;
 extern crate clap;
 extern crate itertools;
@@ -18,9 +19,11 @@ extern crate wat;
 
 use crate::exec::InterpreterKind;
 use crate::stoke::StokeOpts;
+use bus::{Bus, BusReader};
 use parity_wasm::elements::{FuncBody, FunctionType, Instruction, Internal, Module};
-
 use std::path::PathBuf;
+use std::sync::mpsc::sync_channel;
+use std::thread;
 use structopt::StructOpt;
 
 pub mod enumerative;
@@ -97,98 +100,115 @@ impl Superoptimizer {
 
     pub fn run(&self) {
         let module = Module::from_bytes(&self.spec).unwrap();
-
-        // TODO(taegyunkim): Use num_cpus crate to appropriately set the number of workers.
-        let num_workers = 1;
-        let mut candidates: Vec<wasm::Candidate> = Vec::with_capacity(num_workers);
-
+        let num_workers = num_cpus::get();
+        let (res_sender, res_receiver) = sync_channel(num_workers);
+        let mut bus: Bus<()> = Bus::new(num_workers);
         let export_section = module
             .export_section()
             .expect("Module doesn't have export section.");
-
         for export_entry in export_section.entries() {
             if let Internal::Function(_idx) = export_entry.internal() {
-                let func_name = export_entry.field();
-
-                let (func_type, func_body) = parity_wasm_utils::func_by_name(&module, func_name);
-
-                // TODO(taegyunkim): Parallel processing.
+                let mut threads = Vec::new();
                 for _ in 0..num_workers {
-                    if let Some(mut candidate) = self.invoke_search(
-                        func_name,
-                        func_type,
-                        func_body,
-                        &self.options,
-                        Mode::Synthesis,
-                    ) {
-                        candidate.strip_nops();
-                        candidates.push(candidate.clone());
-                        if !self.options.opti {
-                            continue;
+                    let func_name = export_entry.field().to_string();
+                    let tmp_options = self.options.clone();
+                    let tmp_spec = self.spec.clone();
+                    let tmp_module = module.clone();
+                    let mut bus_rx = bus.add_rx();
+                    let res_sender_i = res_sender.clone();
+                    threads.push(thread::spawn({
+                        move || {
+                            let mut candidates = Vec::new();
+                            let (func_type, func_body) =
+                                parity_wasm_utils::func_by_name(&tmp_module, &func_name);
+                            if let Some(mut candidate) = invoke_search(
+                                &tmp_spec,
+                                &func_name,
+                                func_type,
+                                func_body,
+                                &tmp_options,
+                                Mode::Synthesis,
+                                &mut bus_rx,
+                            ) {
+                                candidate.strip_nops();
+                                candidates.push(candidate);
+                                if tmp_options.opti {
+                                    if let Some(mut candidate) = invoke_search(
+                                        &tmp_spec,
+                                        &func_name,
+                                        func_type,
+                                        func_body,
+                                        &tmp_options,
+                                        Mode::Optimization,
+                                        &mut bus_rx,
+                                    ) {
+                                        candidate.strip_nops();
+                                        candidates.push(candidate);
+                                    }
+                                }
+                                res_sender_i.send(candidates).unwrap();
+                            }
                         }
-
-                        if let Some(mut candidate) = self.invoke_search(
-                            func_name,
-                            func_type,
-                            func_body,
-                            &self.options,
-                            Mode::Optimization,
-                        ) {
-                            candidate.strip_nops();
-                            candidates.push(candidate.clone());
-                        }
-                    }
+                    }));
                 }
-            }
-        }
+                let candidates = res_receiver.recv().unwrap();
+                bus.broadcast(());
 
-        rank(&candidates);
-    }
+                for t in threads {
+                    t.join().unwrap();
+                }
 
-    fn invoke_search(
-        &self,
-        func_name: &str,
-        func_type: &FunctionType,
-        func_body: &FuncBody,
-        options: &SuperoptimizerOpts,
-        mode: Mode,
-    ) -> Option<wasm::Candidate> {
-        // NOTE(taegyunkim): Interpreter is not thread safe.
-        let mut interpreter =
-            exec::get_interpreter(options.interpreter_kind, &self.spec, func_name);
-
-        let mut spec = wasm::Spec::new(func_type, func_body);
-
-        let cfg = z3::Config::new();
-        let ctx = z3::Context::new(&cfg);
-        let z3_solver = solver::Z3Solver::new(&ctx, func_type, func_body);
-
-        // Timer to terminate the search after given computing budget.
-        let timer = timer::Timer::new();
-        let (tx, rx) = std::sync::mpsc::channel();
-        // It's necessary to name this variable to trigger the callback.
-        let _guard =
-            timer.schedule_with_delay(chrono::Duration::minutes(options.time_budget), move || {
-                let _ = tx.send(());
-            });
-
-        match &options.algorithm {
-            Algorithm::Stoke(stoke_options) => stoke::search(
-                options,
-                stoke_options,
-                mode,
-                &rx,
-                &z3_solver,
-                interpreter.as_mut(),
-                &mut spec,
-            ),
-            Algorithm::Enumerative => {
-                enumerative::search(options, &rx, &z3_solver, interpreter.as_mut(), &mut spec)
+                rank(&candidates);
             }
         }
     }
 }
+fn invoke_search(
+    spec: &[u8],
+    func_name: &str,
+    func_type: &FunctionType,
+    func_body: &FuncBody,
+    options: &SuperoptimizerOpts,
+    mode: Mode,
+    bus_rx: &mut BusReader<()>,
+) -> Option<wasm::Candidate> {
+    // NOTE(taegyunkim): Interpreter is not thread safe.
+    let mut interpreter = exec::get_interpreter(options.interpreter_kind, spec, func_name);
 
+    let mut spec = wasm::Spec::new(func_type, func_body);
+
+    let cfg = z3::Config::new();
+    let ctx = z3::Context::new(&cfg);
+    let z3_solver = solver::Z3Solver::new(&ctx, func_type, func_body);
+
+    // Timer to terminate the search after given computing budget.
+    let timer = timer::Timer::new();
+    let (tx, timer_rx) = std::sync::mpsc::channel();
+    // It's necessary to name this variable to trigger the callback.
+    let _guard =
+        timer.schedule_with_delay(chrono::Duration::minutes(options.time_budget), move || {
+            let _ = tx.send(());
+        });
+
+    match &options.algorithm {
+        Algorithm::Stoke(stoke_options) => stoke::search(
+            options,
+            stoke_options,
+            mode,
+            (&timer_rx, bus_rx),
+            &z3_solver,
+            interpreter.as_mut(),
+            &mut spec,
+        ),
+        Algorithm::Enumerative => enumerative::search(
+            options,
+            (&timer_rx, bus_rx),
+            &z3_solver,
+            interpreter.as_mut(),
+            &mut spec,
+        ),
+    }
+}
 pub fn rank(candidates: &[wasm::Candidate]) {
     println!("Found {} programs", candidates.len());
 

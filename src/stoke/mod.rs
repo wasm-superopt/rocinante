@@ -1,7 +1,9 @@
+use crate::bus::BusReader;
 use crate::wasm::{Candidate, Spec, StackState};
 use crate::{exec, perf, solver, wasm, Mode, SuperoptimizerOpts};
 use clap::arg_enum;
 use rand::distributions::{Bernoulli, Distribution};
+use std::sync::mpsc::{Receiver, TryRecvError};
 use structopt::StructOpt;
 
 use self::transform::*;
@@ -69,7 +71,7 @@ pub fn search(
     options: &SuperoptimizerOpts,
     stoke_options: &StokeOpts,
     mode: Mode,
-    rx: &std::sync::mpsc::Receiver<()>,
+    (timer_rx, bus_rx): (&Receiver<()>, &mut BusReader<()>),
     z3_solver: &solver::Z3Solver,
     interpreter: &mut dyn exec::Interpreter,
     spec: &mut Spec,
@@ -108,10 +110,15 @@ pub fn search(
             }
         }
 
-        if rx.try_recv().is_ok() {
+        if timer_rx.try_recv().is_ok() {
             println!("Stochastic search {:?} timed out", mode);
             break;
         }
+
+        match bus_rx.try_recv() {
+            Ok(_) | Err(TryRecvError::Disconnected) => break,
+            Err(TryRecvError::Empty) => (),
+        };
 
         let transform_info = transform.operate(&mut rng, &instr_whitelist, &mut candidate);
         let new_cost = eval_candidate(
