@@ -171,7 +171,6 @@ impl<'ctx> Converter<'ctx> {
                 }
             }
         }
-
         locals
     }
     // TODO(taegyunkim): Add test for each case.
@@ -241,7 +240,6 @@ fn convert_op (&self, stack: &mut ValueStack<'ctx>, instr: &Instruction) {
             let res = lhs.bvsrem(&rhs);
             stack.push(res);
         }
-        
         Instruction::I32RemU => {
             let (lhs, rhs) = stack.pop_pair_as::<ast::BV<'ctx>>();
             let res = lhs.bvurem(&rhs);
@@ -419,7 +417,7 @@ fn convert_op (&self, stack: &mut ValueStack<'ctx>, instr: &Instruction) {
                                  const_holes: &mut HashMap<usize, Box<ast::BV<'ctx>>>,
                                  local_holes: &mut HashMap<usize, Box<ast::BV<'ctx>>>) -> ast::Dynamic<'ctx> {
 
-        let mut locals: Vec<ast::Dynamic<'ctx>> = self.init_locals();
+        let locals: Vec<ast::Dynamic<'ctx>> = self.init_locals();
         let mut stack: ValueStack<'ctx> = ValueStack::new();
         let mut hole_idx: usize = 0;
         let mut z3_locals = z3::ast::Array::new_const(&self.ctx,
@@ -436,11 +434,14 @@ fn convert_op (&self, stack: &mut ValueStack<'ctx>, instr: &Instruction) {
             match instr {
                 // local variable ops
                 Instruction::GetLocal(idx) => {
-                    let hole = z3::ast::BV::new_const(&self.ctx, format!("c{}", hole_idx).as_str(), 32);
+                    let hole = z3::ast::BV::new_const(&self.ctx, 
+                        format!("c{}", hole_idx).as_str(), 
+                        32);
                     let z3_val = z3_locals.select(&ast::Dynamic::from_ast(&hole.clone()));
                     match z3_val.as_bv() {
                         Some(x) => {
-                            local_holes.insert(hole_idx, Box::new(hole));
+                            local_holes.insert(hole_idx, 
+                                Box::new(hole));
                             stack.push(x)
                         },
                         _ => {
@@ -450,58 +451,37 @@ fn convert_op (&self, stack: &mut ValueStack<'ctx>, instr: &Instruction) {
                         },
                     }
                 }
-                Instruction::SetLocal(idx) => {
-/*
-                    let hole: &z3::ast::BV<'ctx> = &init_holes[hole_idx];
-                    let z3_val = z3_locals.select(&ast::Dynamic::from_ast(hole.clone()));
-                    match z3_val.as_bv() {
-                        Some(_) => {
-                            let val = stack.pop();
-                            z3_locals.store(&ast::Dynamic::from_ast(idx_hole), &val.into());
-                            local_holes.insert(hole_idx, Box::new(hole.clone()));
-                        },
-                        _ => {
-                            println!("SetLocal couldn't be synthesized");
-                            let val = stack.pop();
-                            locals[*idx as usize] = val;
-                        }
-                    }*/
+                Instruction::SetLocal(_) => {
+                    let hole = z3::ast::BV::new_const(&self.ctx, 
+                        format!("c{}", hole_idx).as_str(), 
+                        32);
                     let val = stack.pop();
-                    locals[*idx as usize] = val;
+                    z3_locals.store(&hole.clone().into(), 
+                         &val.into());
+                    local_holes.insert(hole_idx, 
+                        Box::new(hole));
 
                 }
-                Instruction::TeeLocal(idx) => {
-                    /*
-                    let idx_hole: &z3::ast::BV<'ctx> = &init_holes[hole_idx];
-                    let z3_val = z3_locals.select(&ast::Dynamic::from_ast(idx_hole));
-                    match z3_val.as_bv() {
-                        Some(_) => {
-                            let hole = &init_holes[hole_idx];
-                            let val = stack.pop();
-                            z3_locals.store(&ast::Dynamic::from_ast(idx_hole), &val.clone().into());
-                            local_holes.insert(hole_idx, Box::new(hole.clone()));
-                            stack.push(val);
-                        },
-                        _ => {
-                            println!("TeeLocal couldn't be synthesized");
-                            let val = stack.pop();
-                            stack.push(val.clone());
-                            locals[*idx as usize] = val;
-                        }
-                    }*/
-                     let val = stack.pop();
-                     stack.push(val.clone());
-                     locals[*idx as usize] = val;
-
+                Instruction::TeeLocal(_) => {
+                    let hole = z3::ast::BV::new_const(&self.ctx, 
+                        format!("c{}", hole_idx).as_str(), 
+                        32);
+                    let val = stack.pop();
+                    stack.push(val.clone());
+                    z3_locals.store(&ast::Dynamic::from_ast(&hole), 
+                        &val.clone().into());
+                    local_holes.insert(hole_idx, 
+                        Box::new(hole));
                 }
                 Instruction::I32Const(_) => {
-                    let hole = z3::ast::BV::new_const(&self.ctx, format!("c{}", hole_idx).as_str(), 32);
-                    const_holes.insert(hole_idx, Box::new(hole.clone()));
+                    let hole = z3::ast::BV::new_const(&self.ctx, 
+                        format!("c{}", hole_idx).as_str(), 
+                        32);
+                    const_holes.insert(hole_idx, 
+                        Box::new(hole.clone()));
                     stack.push(hole);
                 }
-                _ => {
-                    self.convert_op(&mut stack, instr);
-                }
+                _ => self.convert_op(&mut stack, instr),
             };
             hole_idx +=1;
         }
@@ -537,46 +517,11 @@ impl<'ctx> Z3Solver<'ctx> {
             spec_f,
         }
     }
-    /*
-    pub fn synth_test(&self) {
-//        let x = z3::ast::Int::new_const(&self.ctx, "x");
 
-        let x = ast::BV::from_u64(&self.ctx, 0, 32);
-//        let c = z3::ast::Int::new_const(&self.ctx, "c");
-let c = z3::ast::BV::new_const(&self.ctx, "c", 32);
-        let c1 = z3::ast::Int::new_const(&self.ctx, "c");
-        let c2 = c.clone();
-        let x = z3::ast::Int::new_const(&self.ctx, "x");
-        let locals = self.converter.init_locals(); 
-        
-        let forall = z3::ast::forall_const(
-            &self.ctx,
-            &[&locals[0].clone().into()],
-            &[],
-
-//            &ast::BV::try_from(locals[0].clone()).unwrap().bvadd(&ast::BV::try_from(locals[0].clone()).unwrap())._eq(&ast::BV::try_from(locals[0].clone()).unwrap().bvmul(&c.to_ast(32))).into()
-            &locals[0].as_bv().unwrap().bvadd(&locals[0].as_bv().unwrap())._eq(&locals[0].as_bv().unwrap().bvmul(&c)).into()
-//            &locals[0].clone().add(&[&locals[0].clone()])._eq(&locals[0].clone().mul(&[&c])).into(),
-        )
-        .as_bool()
-        .unwrap();
-
-        let solver = Solver::new(&self.ctx);
-
-        solver.assert(&forall);
-
-        match solver.check() {
-            z3::SatResult::Sat => {
-                let model = solver.get_model();
-                println!("Result: {}", model.eval(&c).unwrap().as_i64().unwrap());
-
-            }
-            _ => println!("Unsat"),
-        };
-
-    }*/
-
-    pub fn synthesize (&self, instrs: &[Instruction]) -> Vec<Instruction> {
+    pub fn synthesize (&self, 
+                       instrs: &[Instruction],
+                       min_const: i32,
+                       max_const: i32) -> Option<Vec<Instruction>> {
 
         let locals: Vec<ast::Dynamic<'ctx>> = self.converter.init_locals();
         let mut tmp_locals = Vec::<&ast::Dynamic<'ctx>>::with_capacity(locals.len());
@@ -588,23 +533,25 @@ let c = z3::ast::BV::new_const(&self.ctx, "c", 32);
         for i in 0..instrs.len() {
             new_instrs.push(instrs[i].clone());
         }
-
         let solver = Solver::new(&self.ctx);
         let mut params = z3::Params::new(&self.ctx);
-        params.set_u32("timeout", 1000 as u32);
+        // NOTE: if correct programs return UNSAT, it could be
+        // that the timeout is too low
+        params.set_u32("timeout", 2000 as u32);
 
         solver.set_params(&params);
 
         let mut local_holes = HashMap::new();
         let mut const_holes = HashMap::new();
-        let candidate_f = self.converter.convert_for_synthesis(instrs, &mut const_holes, &mut local_holes);
-
-
-        let local_ceiling = ast::BV::from_u64(&self.ctx, locals.len() as u64, 32);
+        let candidate_f = self.converter.convert_for_synthesis(instrs, 
+            &mut const_holes, 
+            &mut local_holes);
 
         solver.push();
-        let const_ceiling = ast::BV::from_i64(&self.ctx, 10, 32);
-        let const_floor = ast::BV::from_i64(&self.ctx, -10, 32);
+        let const_ceiling = ast::BV::from_i64(&self.ctx, 
+            max_const as i64, 32);
+        let const_floor = ast::BV::from_i64(&self.ctx, 
+            min_const as i64, 32);
 
         for (_, c) in const_holes.iter() {
             solver.assert(&c.bvsle(&const_ceiling));
@@ -630,7 +577,7 @@ let c = z3::ast::BV::new_const(&self.ctx, "c", 32);
                             Some(x) => x.as_i64().unwrap() as i32,
                             _ => {
                                 println!("Const hole var not found");
-                                return Vec::new();
+                                return Some(Vec::new());
                             }
                         };
                     println!("Const hole: ({}, {})", *i, value);
@@ -640,39 +587,37 @@ let c = z3::ast::BV::new_const(&self.ctx, "c", 32);
                     let value = 
                         match model.eval(&**c) {
                             Some(x) => x.as_i64().unwrap(),
-                            _ => return Vec::new(),
+                            _ => return None,
                         };
                     new_instrs[*i] = match instrs[*i] {
                         Instruction::GetLocal(_) => {
                             println!("get hole ({}, {})", i, value);
                             if value as usize >= locals.len() {
-                                return Vec::new();
+                                return None;
                             }
                             Instruction::GetLocal(value as u32)
                         }
                         Instruction::SetLocal(_) => {
                             println!("set hole ({}, {})", i, value);
                             if value as usize >= locals.len() {
-                                return Vec::new();
+                                return None;
                             }
                             Instruction::SetLocal(value as u32)
                         }
                         Instruction::TeeLocal(_) => {
                             println!("tee hole ({}, {})", i, value);
                             if value as usize >= locals.len() {
-                                return Vec::new();
+                                return None;
                             }
                             Instruction::TeeLocal(value as u32)
                         }
                         _ => panic!("Hole used incorrectly"),
                     };
                 }
+                Some(new_instrs.clone())
             }
-            _ => {
-                println!("UNSAT"); 
-            }
-        };
-        new_instrs.clone()
+            _ => None
+        }
     }
     pub fn verify(&self, instrs: &[Instruction]) -> VerifyResult {
         let candidate_f = self.converter.convert(instrs);
