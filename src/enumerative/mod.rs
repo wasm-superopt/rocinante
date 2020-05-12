@@ -30,7 +30,6 @@ pub fn search(
                     _ => instr.to_string(),
                 });
         }
-        println!("Key: {}", s);
         if !seen_skeletons.contains_key(&s) {
             seen_skeletons.insert(s, 0); 
             return true;
@@ -41,15 +40,10 @@ pub fn search(
     let contains_const_instrs = | instrs: &[parity_wasm::elements::Instruction] | -> bool {
         for instr in instrs {
             match instr {
-                parity_wasm::elements::Instruction::I32Const(_) => 
-                    return true,
-/*
-                parity_wasm::elements::Instruction::GetLocal(_) => 
-                    return true,
-                parity_wasm::elements::Instruction::SetLocal(_) => 
-                    return true,
-                parity_wasm::elements::Instruction::TeeLocal(_) => 
-                    return true,*/
+                parity_wasm::elements::Instruction::I32Const(_) | 
+                parity_wasm::elements::Instruction::GetLocal(_) | 
+                parity_wasm::elements::Instruction::SetLocal(_) | 
+                parity_wasm::elements::Instruction::TeeLocal(_) => return true,
                 _ => false,
             };
         }
@@ -144,7 +138,6 @@ pub fn search(
             }
         }
     }
-
     None
 }
 fn synthesize_constants (z3_solver: &solver::Z3Solver, 
@@ -169,6 +162,4 @@ fn synthesize_constants (z3_solver: &solver::Z3Solver,
              None
          }
      }
-     
-
 }
