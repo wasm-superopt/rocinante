@@ -10,7 +10,6 @@ pub fn search(
     interpreter: &mut dyn exec::Interpreter,
     spec: &mut wasm::Spec,
 ) -> Option<wasm::Candidate> {
-
     let mut seen_skeletons = HashMap::new();
     // min_const, max_const are synthesis bounds for z3
     let (min_const, max_const) = find_min_max(&options.constants);
@@ -45,11 +44,11 @@ pub fn search(
                 // Explicitly copy the instruction list to keep track of them.
                 let instrs: Vec<parity_wasm::elements::Instruction> =
                     candidate.iter().map(|&item| item.clone()).collect();
-                if instrs.len() >= 5 && 
-                   is_new_skeleton(&instrs, &mut seen_skeletons) &&
-                   contains_const_instrs(&instrs) {
-                    match z3_solver.synthesize(&instrs, 
-                        min_const, max_const) {
+                if instrs.len() >= 5
+                    && is_new_skeleton(&instrs, &mut seen_skeletons)
+                    && contains_const_instrs(&instrs)
+                {
+                    match z3_solver.synthesize(&instrs, min_const, max_const) {
                         Some(v) => {
                             let synthesized_candidate = wasm::Candidate::from_instrs(v);
                             println!("SAT\nFinished synthesizing:\n{:?}", instrs);
@@ -57,11 +56,11 @@ pub fn search(
                             match z3_solver.verify(synthesized_candidate.instrs()) {
                                 solver::VerifyResult::Verified => {
                                     println!("New instructions verified");
-                                    return Some(synthesized_candidate) 
+                                    return Some(synthesized_candidate);
                                 }
                                 _ => println!("Not verified. continuing"),
                             }
-                        },
+                        }
                         _ => continue,
                     };
                 }
@@ -86,7 +85,7 @@ pub fn search(
                                     )
                                 })
                                 .collect();
-                        },
+                        }
                     }
                 } else {
                     match seen_states.iter().position(|s| *s == test_outputs) {
@@ -107,62 +106,47 @@ pub fn search(
     None
 }
 
-fn find_min_max (constants: &[i32]) -> (i32, i32) {
-     let max_const = constants.iter()
-         .fold(0, |max, &x| {
-              if x > max {
-                  x
-              } else {
-                  max 
-              }
-          });
-     let min_const = constants.iter()
-         .fold(0, |min, &x| {
-              if x < min {
-                  x
-              } else {
-                  min 
-              }
-          });
-     (min_const, max_const)
+fn find_min_max(constants: &[i32]) -> (i32, i32) {
+    let max_const = constants
+        .iter()
+        .fold(0, |max, &x| if x > max { x } else { max });
+    let min_const = constants
+        .iter()
+        .fold(0, |min, &x| if x < min { x } else { min });
+    (min_const, max_const)
 }
 
 // TODO: Find a more efficient way to do this
-fn is_new_skeleton (instrs: &[parity_wasm::elements::Instruction], 
-                    seen_skeletons: &mut HashMap<String, i32>) -> bool {
+fn is_new_skeleton(
+    instrs: &[parity_wasm::elements::Instruction],
+    seen_skeletons: &mut HashMap<String, i32>,
+) -> bool {
     let mut s = "".to_string();
     for instr in instrs {
-        s.push_str( 
-            &match instr {
-                parity_wasm::elements::Instruction::I32Const(_) => 
-                    "i32.const".to_string(),
-                parity_wasm::elements::Instruction::GetLocal(_) => 
-                    "i32.getlocal".to_string(),
-                parity_wasm::elements::Instruction::SetLocal(_) => 
-                    "i32.setlocal".to_string(),
-                parity_wasm::elements::Instruction::TeeLocal(_) => 
-                    "i32.teelocal".to_string(),
-                _ => instr.to_string(),
-            });
+        s.push_str(&match instr {
+            parity_wasm::elements::Instruction::I32Const(_) => "i32.const".to_string(),
+            parity_wasm::elements::Instruction::GetLocal(_) => "i32.getlocal".to_string(),
+            parity_wasm::elements::Instruction::SetLocal(_) => "i32.setlocal".to_string(),
+            parity_wasm::elements::Instruction::TeeLocal(_) => "i32.teelocal".to_string(),
+            _ => instr.to_string(),
+        });
     }
     if !seen_skeletons.contains_key(&s) {
         false
-    }
-    else {
-        seen_skeletons.insert(s, 0); 
+    } else {
+        seen_skeletons.insert(s, 0);
         true
     }
 }
-fn contains_const_instrs (instrs: &[parity_wasm::elements::Instruction] ) -> bool {
+fn contains_const_instrs(instrs: &[parity_wasm::elements::Instruction]) -> bool {
     for instr in instrs {
         match instr {
-            parity_wasm::elements::Instruction::I32Const(_) | 
-            parity_wasm::elements::Instruction::GetLocal(_) | 
-            parity_wasm::elements::Instruction::SetLocal(_) | 
-            parity_wasm::elements::Instruction::TeeLocal(_) => return true,
+            parity_wasm::elements::Instruction::I32Const(_)
+            | parity_wasm::elements::Instruction::GetLocal(_)
+            | parity_wasm::elements::Instruction::SetLocal(_)
+            | parity_wasm::elements::Instruction::TeeLocal(_) => return true,
             _ => false,
         };
     }
     false
 }
-
