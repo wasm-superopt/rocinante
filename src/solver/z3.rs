@@ -424,11 +424,11 @@ fn convert_op (&self, stack: &mut ValueStack<'ctx>, instr: &Instruction) {
             "locals",
             &z3::Sort::bitvector(&self.ctx,32),
             &z3::Sort::bitvector(&self.ctx,32));
-        for i in 0..locals.len() {
+        for (i, loc) in locals.iter().enumerate() {
             z3_locals = z3_locals
                 .store(&ast::BV::from_i64(&self.ctx, i as i64, 32)
                 .into(),
-                &locals[i].clone().into());
+                &loc.clone());
         }
         for instr in instrs {
             match instr {
@@ -456,8 +456,7 @@ fn convert_op (&self, stack: &mut ValueStack<'ctx>, instr: &Instruction) {
                         format!("c{}", hole_idx).as_str(), 
                         32);
                     let val = stack.pop();
-                    z3_locals.store(&hole.clone().into(), 
-                         &val.into());
+                    z3_locals.store(&hole.clone().into(), &val);
                     local_holes.insert(hole_idx, 
                         Box::new(hole));
 
@@ -469,7 +468,7 @@ fn convert_op (&self, stack: &mut ValueStack<'ctx>, instr: &Instruction) {
                     let val = stack.pop();
                     stack.push(val.clone());
                     z3_locals.store(&ast::Dynamic::from_ast(&hole), 
-                        &val.clone().into());
+                        &val.clone());
                     local_holes.insert(hole_idx, 
                         Box::new(hole));
                 }
@@ -527,12 +526,11 @@ impl<'ctx> Z3Solver<'ctx> {
         let mut tmp_locals = Vec::<&ast::Dynamic<'ctx>>::with_capacity(locals.len());
 
         let mut new_instrs = Vec::<Instruction>::with_capacity(instrs.len());
-        for i in 0..locals.len() {
-            tmp_locals.push( &locals[i]);
+        for l in locals.iter() {
+            tmp_locals.push(l);
         }
-        for i in 0..instrs.len() {
-            new_instrs.push(instrs[i].clone());
-        }
+//        tmp_locals.clone_from_slice(&locals[..]);
+        new_instrs.clone_from_slice(&instrs[..]);
         let solver = Solver::new(&self.ctx);
         let mut params = z3::Params::new(&self.ctx);
         // NOTE: if correct programs return UNSAT, it could be
@@ -562,7 +560,7 @@ impl<'ctx> Z3Solver<'ctx> {
             &self.ctx,
             &tmp_locals,
             &[],
-            &self.spec_f._eq(&candidate_f.into()).into())
+            &self.spec_f._eq(&candidate_f).into())
         .as_bool()
         .unwrap(); 
 
@@ -577,7 +575,7 @@ impl<'ctx> Z3Solver<'ctx> {
                             Some(x) => x.as_i64().unwrap() as i32,
                             _ => {
                                 println!("Const hole var not found");
-                                return Some(Vec::new());
+                                return None;
                             }
                         };
                     println!("Const hole: ({}, {})", *i, value);
@@ -614,7 +612,7 @@ impl<'ctx> Z3Solver<'ctx> {
                         _ => panic!("Hole used incorrectly"),
                     };
                 }
-                Some(new_instrs.clone())
+                Some(new_instrs)
             }
             _ => None
         }

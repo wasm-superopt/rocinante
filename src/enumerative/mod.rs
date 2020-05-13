@@ -107,7 +107,7 @@ pub fn search(
     None
 }
 
-fn find_min_max (constants: &Vec<i32>) -> (i32, i32) {
+fn find_min_max (constants: &[i32]) -> (i32, i32) {
      let max_const = constants.iter()
          .fold(0, |max, &x| {
               if x > max {
@@ -145,12 +145,12 @@ fn is_new_skeleton (instrs: &[parity_wasm::elements::Instruction],
                 _ => instr.to_string(),
             });
     }
-    match !seen_skeletons.contains_key(&s) {
-        false => false,
-        _ => {
-            seen_skeletons.insert(s, 0); 
-            true
-        },
+    if !seen_skeletons.contains_key(&s) {
+        false
+    }
+    else {
+        seen_skeletons.insert(s, 0); 
+        true
     }
 }
 fn contains_const_instrs (instrs: &[parity_wasm::elements::Instruction] ) -> bool {
