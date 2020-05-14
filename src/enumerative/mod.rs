@@ -62,7 +62,6 @@ pub fn search(
                             }
                         }
                         _ => continue,
-                    
                     };
                 }
                 // Get test outputs returns the output values that are different from the spec, so
