@@ -62,6 +62,7 @@ pub fn search(
                             }
                         }
                         _ => continue,
+                    
                     };
                 }
                 // Get test outputs returns the output values that are different from the spec, so
@@ -132,10 +133,10 @@ fn is_new_skeleton(
         });
     }
     if !seen_skeletons.contains_key(&s) {
-        false
+        true
     } else {
         seen_skeletons.insert(s, 0);
-        true
+        false
     }
 }
 fn contains_const_instrs(instrs: &[parity_wasm::elements::Instruction]) -> bool {

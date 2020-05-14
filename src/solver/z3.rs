@@ -521,8 +521,9 @@ impl<'ctx> Z3Solver<'ctx> {
         for l in locals.iter() {
             tmp_locals.push(l);
         }
-        //        tmp_locals.clone_from_slice(&locals[..]);
-        new_instrs.clone_from_slice(&instrs[..]);
+        for ins in instrs.iter() {
+            new_instrs.push(ins.clone());
+        }
         let solver = Solver::new(&self.ctx);
         let mut params = z3::Params::new(&self.ctx);
         // NOTE: if correct programs return UNSAT, it could be
